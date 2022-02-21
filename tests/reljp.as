@@ -15,12 +15,16 @@ jp z,a2
 a3:defs 127
 jp z,a3
 
+JOPT OFF
+
 a4:defs 125
 jp a4
 a5:defs 126
 jp a5
 a6:defs 127
 jp a6
+
+JOPT ON
 
 jp a7
 defs 126

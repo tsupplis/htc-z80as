@@ -21,6 +21,9 @@
 ;                                                                      ;
 ;**********************************************************************;
 
+	TITLE	Z80AS Macro-Assembler
+	SUBTTL	MACROS support
+
 *include	ZSM.INC
 
 	GLOBAL	ID,ADDSYM

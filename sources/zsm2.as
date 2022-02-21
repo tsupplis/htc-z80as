@@ -32,15 +32,15 @@
         global  REQCHR
 
 ;external
-	global	JPASS,JCOUNT,PTR1,AdjustLabels
+	global	JPASS,JCOUNT,PTR1,AdjustLabels,JOPTDIS
         global  CMPHD
         global  EVAL,EVALNEW,EVALREG
         global  EVALCND,EVBRKT
         global  EVALSRG
         global  RELERR,REGVAL
 
-        global  PASSNO,MODNAM,MODIDN    ;,CSSIZE,DSSIZE
-        global  EFLG,ENDADR,ENDMOD	;,PHFLAG,UPDSIZ,SELCMN
+        global  PASSNO
+        global  EFLG,ENDADR,ENDMOD
         global  QFLAG,COMNTC,LOCFLG,ASEGPC,CSEGPC,DSEGPC
         global  LCLNUM,OPCODE,TYPTBL
 
@@ -110,13 +110,13 @@ S18:    call    GNC
         jr      z,S19
         dec     a
         ld      b,5Eh           ; IM 2
-        jr      z,S19
-        ld      c,a
-        ld      a,(CPU)
-        cp      2               ; Z280?
-        jp      nz,OERROR
-        dec     c
-        ld      b,4Eh           ; IM 3
+;        jr      z,S19
+;        ld      c,a
+;        ld      a,(CPU)
+;        cp      2               ; Z280?
+;        jp      nz,OERROR
+;        dec     c
+;        ld      b,4Eh           ; IM 3
         jp      nz,OERROR
 S19:    ld      a,b
         jp      EMITB
@@ -262,13 +262,16 @@ CL3:    ld	hl,(PTR1)	;save PTR1
 	cp	4
 	jr	nc,CL3A
 				; if cond = Z,NZ,C,NC
-	ld	a,(JFLAG)	; if -J specified
-	or	a
-	jr	z,CL3A
-	ld	a,(PASSNO)	; if PASSNO == 0 and JPASS == 0
-	ld	b,a
-	ld	a,(JPASS)
-	or	b
+	ld	hl,JOPTDIS
+	ld	a,(hl)		; 0FFH if enabled
+	inc	hl		; JFLAG 0FFH if check requested
+	and	(hl)		; if not both == 0FFH
+	jr	z,CL3A		; skip range checking
+	inc	hl
+	ld	a,(hl)		; JPASS 
+	inc	hl		; PASSNO
+	ld	b,(hl)		; B=PASSNO
+	or	b		; if PASSNO == 0 and JPASS == 0
 	jr	z,CL3A		; skip range checking
 	call	CheckRange	; else check range
 	jr	nc,CL3A		; out range, stay with JP
@@ -303,13 +306,16 @@ S44:
 	ld	a,(OPCODE)
 	cp	0C3H
 	jr	nz,S44A
-	ld	a,(JFLAG)	; if -J specified
-	or	a
-	jr	z,S44A
-	ld	a,(PASSNO)	; if PASSNO == 0 and JPASS == 0
-	ld	b,a
-	ld	a,(JPASS)
-	or	b
+	ld	hl,JOPTDIS
+	ld	a,(hl)		; 0FFH if enabled
+	inc	hl		; JFLAG 0FFH if check requested
+	and	(hl)		; if not both == 0FFH
+	jr	z,S44A		; skip range checking
+	inc	hl
+	ld	a,(hl)		; JPASS 
+	inc	hl		; PASSNO
+	ld	b,(hl)		; B=PASSNO
+	or	b		; if PASSNO == 0 and JPASS == 0
 	jr	z,S44A		; skip range checking
 	call	CheckRange	; else check range
 	jr	c,jpopt		; in range, do JP optimization
@@ -320,7 +326,7 @@ S44A:
 ;
 ;       JP      (HL/IX/IY)
 ;
-S53     equ     $               ; process () form
+S53:	;     equ     $               ; process () form
         call    EVALSRG
         cp      RSNAME
         jr      z,S57A          ; branch if special reg (Z280)
@@ -341,25 +347,28 @@ S53     equ     $               ; process () form
 ;
 ;       CALL/JP cond,(HL)       ; Z280
 ;
-S56:    push    bc
-        call    EVALSRG
-        pop     bc
-        cp      RSNAME
-        jr      z,S58A          ; branch if special reg
-        cp      RPNAME          ; else must be rpair
-        jp      nz,OERROR
-        ld      a,l
-        cp      4
-        jp      nz,OERROR
-S54:    ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,h
-        or      a
-        jp      nz,OERROR       ; IX/IY not allowed
-        ld      a,0DDh
-        call    EMITB
-        ld      a,b
+S56:    
+;	push    bc
+;       call    EVALSRG
+;        pop     bc
+;        cp      RSNAME
+;        jr      z,S58A          ; branch if special reg
+;        cp      RPNAME          ; else must be rpair
+;        jp      nz,OERROR
+;        ld      a,l
+;        cp      4
+;        jp      nz,OERROR
+S54:    
+	jp	OERROR
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,h
+;        or      a
+;        jp      nz,OERROR       ; IX/IY not allowed
+;        ld      a,0DDh
+;        call    EMITB
+;        ld      a,b
 S55:    call    EMITB
         call    REQCHR
         defb    ')'
@@ -367,50 +376,56 @@ S55:    call    EMITB
 ;
 ;       CALL/JP cond,(PC+addr)  ; Z280
 ;
-S57A:   ld      a,(OPCODE)
-        ld      b,a
-S58A:   push    bc
-        call    EVALNEW
-        pop     bc
-        ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,0FDh
-        call    EMITB
-        ld      a,b
-        call    EMITB
-        call    EMITV           ; emit relative address
-        call    REQCHR
-        defb    ')'
-        ret
+S57A:   
+	jp	OERROR
+;	ld      a,(OPCODE)
+;        ld      b,a
+;S58A:   push    bc
+;        call    EVALNEW
+;        pop     bc
+;        ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,0FDh
+;        call    EMITB
+;        ld      a,b
+;        call    EMITB
+;        call    EMITV           ; emit relative address
+;        call    REQCHR
+;        defb    ')'
+;        ret
 ;
 ;       CALL/JP cond,<addr>     ; Z280
 ;
-S57:    ld      a,(OPCODE)
-        ld      b,a
-S58:    push    bc
-        call    EVALNEW
-        pop     bc
-        ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,0FDh
-        call    EMITB
-        ld      a,b
-        call    EMITB
-        ld      de,0
-        call    EMITVR          ; emit relative address
-        call    REQCHR
-        defb    '>'
-        ret
+S57:    
+;	ld      a,(OPCODE)
+;        ld      b,a
+S58:    
+	jp	OERROR
+;	push    bc
+;        call    EVALNEW
+;        pop     bc
+;        ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,0FDh
+;        call    EMITB
+;        ld      a,b
+;        call    EMITB
+;        ld      de,0
+;        call    EMITVR          ; emit relative address
+;        call    REQCHR
+;        defb    '>'
+;        ret
 
 ;       SUBTTL  Instruction Class 4 - Relative Jumps
 ;
 ;       Class 4 - Relative jumps (JR and DJNZ, also Z280's JAF and JAR)
 ;
-CL4:    ld      a,(OPCODE+1)
-        or      a
-        jr      nz,S67          ; branch if JAF or JAR
+CL4:    
+;	ld      a,(OPCODE+1)
+;        or      a
+;        jr      nz,S67          ; branch if JAF or JAR
         call    EVALCND         ; try conditional
         cp      CONDD
         jp      nz,S68          ; jump if not conditional
@@ -427,8 +442,8 @@ CL4:    ld      a,(OPCODE+1)
         call    EVALNEW         ; get target address
         jr      S68A            ; now go process like non-conditional
 ;
-S67:    call    EMITB           ; emit prefix for JAF/JAR
-        call    EVALNEW         ; get target address
+;S67:    call    EMITB           ; emit prefix for JAF/JAR
+;        call    EVALNEW         ; get target address
 S68:    ld      a,(OPCODE)
         call    EMITB           ; emit opcode
 S68A:   ld      hl,(VAL)
@@ -442,10 +457,10 @@ S68A:   ld      hl,(VAL)
         sbc     hl,de           ; subtract effective PC
 S68B:   dec     hl
         dec     hl              ; -2
-        ld      a,(OPCODE+1)
-        or      a
-        jr      z,S68C
-        dec     hl              ; -3 if JAF/JAR
+;        ld      a,(OPCODE+1)
+;        or      a
+;        jr      z,S68C
+;        dec     hl              ; -3 if JAF/JAR
 S68C:   ld      a,l
         call    EMITB
         ld      a,(EVMODE)
@@ -569,11 +584,13 @@ ADTBL:  defw    S92             ; (addr)
 ;
 ;       ADD     (addr)
 ;
-S92:    ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      c,87h
-        jr      S93A
+S92:    
+	jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      c,87h
+;        jr      S93A
 ;
 ;       ADD     (rp)
 ;
@@ -598,60 +615,66 @@ S91:    ld      a,(REGVAL+1)
 ;
 ;       ADD     (rp+d16)        ; Z280
 ;
-S87A:   ld      hl,(REGVAL)
-        ld      a,l
-        cp      6
-        jr      z,S93           ; branch if SP (Z280)
-        ld      a,h
-        or      a
-        ld      c,83h           ; HL
-        jr      z,S90
-        cp      0DDh
-        ld      c,81h           ; IX
-        jr      z,S90
-        inc     c               ; IY
-S90:    ld      a,0FDh
-        call    EMITB
-        ld      a,(OPCODE)
-        add     a,c
-        call    EMITB
-        jp      EMITV           ; emit address
+S87A:   
+	ret			;
+;	ld      hl,(REGVAL)
+;        ld      a,l
+;        cp      6
+;        jr      z,S93           ; branch if SP (Z280)
+;        ld      a,h
+;        or      a
+;        ld      c,83h           ; HL
+;        jr      z,S90
+;        cp      0DDh
+;        ld      c,81h           ; IX
+;        jr      z,S90
+;        inc     c               ; IY
+;S90:    ld      a,0FDh
+;        call    EMITB
+;        ld      a,(OPCODE)
+;        add     a,c
+;        call    EMITB
+;        jp      EMITV           ; emit address
 ;
 ;       ADD     (SP+d16)
 ;
-S93:    ld      a,(CPU)
-        cp      2               ; Z280 only
-        jp      nz,OERROR
-        ld      c,80h
-S93A:   ld      a,0DDh
-        call    EMITB
-        ld      a,(OPCODE)
-        add     a,c
-        call    EMITB
-        jp      EMITV           ; emit address
+S93:
+	jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2               ; Z280 only
+;        jp      nz,OERROR
+;        ld      c,80h
+;S93A:   ld      a,0DDh
+;        call    EMITB
+;        ld      a,(OPCODE)
+;        add     a,c
+;        call    EMITB
+;        jp      EMITV           ; emit address
 ;
 ;       ADD     (x+y)           ; Z280
 ;
-S88:    ld      a,0DDh
-        call    EMITB
-        ld      a,(OPCODE)
-        add     a,b
-        add     a,80h
-        jp      EMITB
+S88:	jp	OERROR		;
+;	ld      a,0DDh
+;        call    EMITB
+;        ld      a,(OPCODE)
+;        add     a,b
+;        add     a,80h
+;        jp      EMITB
 ;
 ;       ADD     <nnnn>          ; Z280
 ;       ADD     (PC+nnnn)       ; Z280
 ;
-S86:    ld      a,0FDh
-        call    EMITB
-        ld      a,(OPCODE)
-        add     a,80h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITV         ; emit index if (PC+nnnn)
-        ld      de,0
-        jp      EMITVR          ; else emit relative address
+S86:	jp	OERROR		;
+;	ld      a,0FDh
+;        call    EMITB
+;        ld      a,(OPCODE)
+;        add     a,80h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITV         ; emit index if (PC+nnnn)
+;        ld      de,0
+;        jp      EMITVR          ; else emit relative address
 ;
 ;       Process register pair ADD,SUB,ADC,SBC
 ;
@@ -701,19 +724,20 @@ S96E:   ld      a,l
 ;
 ;       ADD     HL/IX/IY,A      ; Z280
 ;
-S96F:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,(VAL)
-        cp      7
-        jp      nz,OERROR       ; only reg A allowed
-        ld      a,(OPCODE+1)
-        cp      9
-        jp      nz,OERROR       ; error if not ADD
-        ld      a,0EDh
-        call    EMITB
-        ld      a,6Dh
-        jp      EMITB
+S96F:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,(VAL)
+;        cp      7
+;        jp      nz,OERROR       ; only reg A allowed
+;        ld      a,(OPCODE+1)
+;        cp      9
+;        jp      nz,OERROR       ; error if not ADD
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,6Dh
+;        jp      EMITB
 
 ;       SUBTTL  Instruction Class 7 - I/O instructions
 ;
@@ -796,120 +820,128 @@ S98:    ld      a,c
 ;
 ;       IN      (...),(C)       ; Z280
 ;
-S100:   ld      c,a
-        ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,c
-        call    EVBRKT
-        push    af
-        call    CHKIOC
-        pop     af
-        ld      hl,IOTBL1
-        jp      SWITCH
+S100:   jp	OERROR		;
+;	ld      c,a
+;        ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,c
+;        call    EVBRKT
+;        push    af
+;        call    CHKIOC
+;        pop     af
+;        ld      hl,IOTBL1
+;        jp      SWITCH
+
+;	psect	data
+
 ;
-IOTBL1: defw    S103            ; (addr)
-        defw    OERROR          ; (r)
-        defw    S100A           ; (rp)
-        defw    S100A           ; (rp+d8)
-        defw    S100A           ; (rp+d16)  Z280
-        defw    S100B           ; (x+y)     Z280
-        defw    S101            ; (PC+d16)  Z280
-        defw    S101            ; <addr>    Z280
+;IOTBL1: defw    S103            ; (addr)
+;        defw    OERROR          ; (r)
+;        defw    S100A           ; (rp)
+;        defw    S100A           ; (rp+d8)
+;        defw    S100A           ; (rp+d16)  Z280
+;        defw    S100B           ; (x+y)     Z280
+;        defw    S101            ; (PC+d16)  Z280
+;        defw    S101            ; <addr>    Z280
+
+;	psect	text
+
 ;
-S100A:  ld      a,(REGVAL)
-        cp      6
-        jr      z,S104          ; branch if SP
-        cp      4
-        jp      nz,OERROR       ; else only HL/IX/IY allowed
-        jr      S105            ; branch if no match
+;S100A:  ld      a,(REGVAL)
+;        cp      6
+;        jr      z,S104          ; branch if SP
+;        cp      4
+;        jp      nz,OERROR       ; else only HL/IX/IY allowed
+;        jr      S105            ; branch if no match
 ;
-S100B:  ld      a,0DDh
-        call    EMITB
-        ld      a,0EDh
-        call    EMITB
-        ld      a,b
-        rlca
-        rlca
-        rlca
-        ld      c,a
-        ld      a,(OPCODE+1)
-        add     a,c
-        jp      EMITB
+;S100B:  ld      a,0DDh
+;        call    EMITB
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,b
+;        rlca
+;        rlca
+;        rlca
+;        ld      c,a
+;        ld      a,(OPCODE+1)
+;        add     a,c
+;        jp      EMITB
 ;
-S103:   ld      a,0DDh
-        call    EMITB
-        ld      a,0EDh
-        call    EMITB
-        ld      a,(OPCODE+1)
-        add     a,38h
-        call    EMITB
-        jp      EMITV           ; emit address
+;S103:   ld      a,0DDh
+;        call    EMITB
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,(OPCODE+1)
+;        add     a,38h
+;        call    EMITB
+;        jp      EMITV           ; emit address
 ;
 ;       IN      (SP+nnn),(C)    ; Z280
 ;
-S104:   ld      c,0
-        ld      a,0DDh
-        jr      S107
+;S104:   ld      c,0
+;        ld      a,0DDh
+;        jr      S107
 ;
-S105:   ld      a,(REGVAL+1)
-        cp      0DDh
-        ld      c,08h
-        jr      z,S106
-        cp      0FDh
-        ld      c,10h
-        jr      z,S106
-        ld      c,18h
-S106:   ld      a,0FDh
-S107:   call    EMITB
-        ld      a,0EDh
-        call    EMITB
-        ld      a,(OPCODE+1)
-        add     a,c
-        call    EMITB
-        jp      EMITV           ; emit address
+;S105:   ld      a,(REGVAL+1)
+;        cp      0DDh
+;        ld      c,08h
+;        jr      z,S106
+;        cp      0FDh
+;        ld      c,10h
+;        jr      z,S106
+;        ld      c,18h
+;S106:   ld      a,0FDh
+;S107:   call    EMITB
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,(OPCODE+1)
+;        add     a,c
+;        call    EMITB
+;        jp      EMITV           ; emit address
 ;
 ;       IN      <addr>,(C)      ; Z280
 ;       IN      (PC+addr),(C)   ; Z280
 ;
-S101:   ld      a,0FDh
-        call    EMITB
-        ld      a,0EDh
-        call    EMITB
-        ld      a,(OPCODE+1)
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITV         ; emit index if (PC+addr)
-        ld      de,0
-        jp      EMITVR          ; else emit relative address
+;S101:   ld      a,0FDh
+;        call    EMITB
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,(OPCODE+1)
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITV         ; emit index if (PC+addr)
+;        ld      de,0
+;        jp      EMITVR          ; else emit relative address
 ;
 ;       IN      HL,(C)          ; Z280
 ;
-S102:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      hl,(VAL)
-        ld      de,4
-        call    CMPHD           ; only HL allowed
-        jp      nz,OERROR
-        call    CHKIOC
-        ld      a,0EDh
-        call    EMITB
-        ld      a,0B7h
-        jp      EMITB
+S102:	jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      hl,(VAL)
+;        ld      de,4
+;        call    CMPHD           ; only HL allowed
+;        jp      nz,OERROR
+;        call    CHKIOC
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,0B7h
+;        jp      EMITB
 ;
 ;       Test for ',(C)' operand
 ;
-CHKIOC: call    REQCHR
-        defb    ','
-CHKCC:  call    REQCHR
-        defb    '('
-        call    REQCHR
-        defb    'C'
-        call    REQCHR
-        defb    ')'
-        ret
+;CHKIOC: call    REQCHR
+;        defb    ','
+;CHKCC:  call    REQCHR
+;        defb    '('
+;        call    REQCHR
+;        defb    'C'
+;        call    REQCHR
+;        defb    ')'
+;        ret
 ;
 ;       OUT instruction
 ;
@@ -944,16 +976,17 @@ ZOUT:   call    GNC
 ;
 ;       OUT     (C),HL          ; Z280
 ;
-S109A:  ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      de,4
-        call    CMPHD
-        jp      nz,OERROR       ; only HL is valid
-        ld      a,0EDh
-        call    EMITB
-        ld      a,0BFh
-        jp      EMITB
+S109A:	jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      de,4
+;        call    CMPHD
+;        jp      nz,OERROR       ; only HL is valid
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,0BFh
+;        jp      EMITB
 ;
 ;       OUT     (nn),A
 ;
@@ -971,106 +1004,113 @@ S109:   call    REQCHR
 ;
 ;       OUT     (C),(...)       ; Z280
 ;
-S108:   ld      c,a
-        ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR
-        ld      a,c
-        call    EVBRKT          ; evaluate expression in brackets
-        ld      hl,IOTBL1       ; process via common code
-        jp      SWITCH
+S108:	jp	OERROR		;
+;	ld      c,a
+;        ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR
+;        ld      a,c
+;        call    EVBRKT          ; evaluate expression in brackets
+;        ld      hl,IOTBL1       ; process via common code
+;        jp      SWITCH
 ;
 ;       IN0     r,(p)           ; Z180
 ;
-ZIN0:   call    EVALREG
-        cp      RNAME           ; ensure single register
-        jp      nz,OERROR
-        ld      hl,(VAL)
-        ld      a,h
-        or      a
-        jp      nz,OERROR       ; IXH,IXL,IYH,IYL not permitted
-        ld      a,0EDh
-        call    EMITB
-        ld      a,l
-        rlca
-        rlca
-        rlca
-        call    EMITB
-        call    REQCHR
-        defb    ','
-        call    REQCHR
-        defb    '('
-        call    EVALNEW         ; get port number
-        ld      a,l
-        call    EMITB
-        call    REQCHR
-        defb    ')'
-        ret
+ZIN0:   jp	OERROR		;
+;	call    EVALREG
+;        cp      RNAME           ; ensure single register
+;        jp      nz,OERROR
+;        ld      hl,(VAL)
+;        ld      a,h
+;        or      a
+;        jp      nz,OERROR       ; IXH,IXL,IYH,IYL not permitted
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,l
+;        rlca
+;        rlca
+;        rlca
+;        call    EMITB
+;        call    REQCHR
+;        defb    ','
+;        call    REQCHR
+;        defb    '('
+;        call    EVALNEW         ; get port number
+;        ld      a,l
+;        call    EMITB
+;        call    REQCHR
+;        defb    ')'
+;        ret
 ;
 ;       OUT0    (p),r           ; Z180
 ;
-ZOUT0:  call    REQCHR
-        defb    '('
-        call    EVALNEW         ; get port number
-        push    hl
-        call    REQCHR
-        defb    ')'
-        call    REQCHR
-        defb    ','
-        call    EVALREG
-        cp      RNAME           ; ensure single register
-        jp      nz,OERROR
-        ld      hl,(VAL)
-        ld      a,h
-        or      a
-        jp      nz,OERROR       ; IXH,IXL,IYH,IYL not permitted
-        ld      a,0EDh
-        call    EMITB
-        ld      a,l
-        rlca
-        rlca
-        rlca
-        or      01h
-        call    EMITB
-        pop     hl
-        ld      a,l
-        jp      EMITB
+ZOUT0:	jp	OERROR		;
+;	call    REQCHR
+;        defb    '('
+;        call    EVALNEW         ; get port number
+;        push    hl
+;        call    REQCHR
+;        defb    ')'
+;        call    REQCHR
+;        defb    ','
+;        call    EVALREG
+;        cp      RNAME           ; ensure single register
+;        jp      nz,OERROR
+;        ld      hl,(VAL)
+;        ld      a,h
+;        or      a
+;        jp      nz,OERROR       ; IXH,IXL,IYH,IYL not permitted
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,l
+;        rlca
+;        rlca
+;        rlca
+;        or      01h
+;        call    EMITB
+;        pop     hl
+;        ld      a,l
+;        jp      EMITB
 ;
 ;       TSTIO   p               ; Z180
 ;
-ZTSTIO: call    EVALNEW         ; get port number
-        ld      a,0EDh
-        call    EMITB
-        ld      a,74h
-        call    EMITB
-        ld      hl,(VAL)
-        ld      a,(EVMODE)
-        call    REQ8U
-        ld      a,l
-        jp      EMITB
+ZTSTIO: jp	OERROR		;
+;	call    EVALNEW         ; get port number
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,74h
+;        call    EMITB
+;        ld      hl,(VAL)
+;        ld      a,(EVMODE)
+;        call    REQ8U
+;        ld      a,l
+;        jp      EMITB
 ;
 ;       TSTI    (C)             ; Z280
 ;
-ZTSTI:  call    CHKCC           ; test for (C) oerand
-        ld      a,0EDh
-        call    EMITB
-        ld      a,70h
-        jp      EMITB
+ZTSTI:  jp	OERROR		;
+;	call    CHKCC           ; test for (C) oerand
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,70h
+;        jp      EMITB
 ;
 ;       INW     HL,(C)          ; Z280
 ;
-ZINW:   call    EVALREG
-        cp      RPNAME
-        jp      nz,OERROR
-        jp      S102            ; continue via common IN code
+ZINW:   jp	OERROR		;
+;	call    EVALREG
+;        cp      RPNAME
+;        jp      nz,OERROR
+;        jp      S102            ; continue via common IN code
 ;
 ;       OUTW    (C),HL
 ;
-ZOUTW:  call    CHKCC           ; syntax requires (C)
-        call    REQCHR
-        defb    ','
-        call    EVALREG
-        cp      RPNAME
-        jp      nz,OERROR
-        jp      S109A           ; continue via common OUT code
+ZOUTW:  jp	OERROR		;
+;	call    CHKCC           ; syntax requires (C)
+;        call    REQCHR
+;        defb    ','
+;        call    EVALREG
+;        cp      RPNAME
+;        jp      nz,OERROR
+;        jp      S109A           ; continue via common OUT code
 

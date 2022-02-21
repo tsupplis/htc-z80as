@@ -24,7 +24,7 @@
 *include        ZSM.INC
 
 ;local
-	global	JCOUNT,JPASS,ISDIG,atof,fperr
+	global	JOPTDIS,JCOUNT,JPASS,ISDIG,atof,fperr
         global  VAL
         global  ERRFLG,BACKUP,GNC,CPU
         global  PCFLAG,CURSEG
@@ -55,13 +55,10 @@
         global  CLINE,LSTB,WOBJ,WOBJ16,LSTW
         global  IDTOUP
 
-        global  S662,S552,S321
+        global  S662,S321
 
         global  SYMPTR
         global  DSPTR
-        global  NAMLEN
-        global  MODNAM
-        global  MODIDN
         global  CPU
         global  DEFCPU
         global  PC
@@ -191,6 +188,36 @@ PSDTAB: defw    S300            ; EQU,ASET,DEFL
         defw    S660            ; .COMMENT
         defw    S670            ; PSECT
 	defw	SDEFF		; DEFF
+	defw	SJOPT		; JOPT
+;
+;	JOPT ON / OFF
+;
+SJOPT:
+	call	GNC		;if line ends here
+	or	a
+	jp	z,OERROR	;signal error & return
+	call	UCASE
+	cp	'O'
+	jp	nz,OERROR
+	ld	hl,(PTR1)		; pointer to next char
+	ld	a,(hl)
+	call	UCASE
+	cp	'N'
+	jp	nz,off?
+	ld	a,0FFH
+setjopt:ld	(JOPTDIS),a	;enable
+	inc	hl
+	ld	(PTR1),hl
+	ret
+off?:	cp	'F'
+	jp	nz,OERROR
+	inc	hl
+	ld	a,(hl)
+	call	UCASE
+	cp	'F'
+	jp	nz,OERROR
+	xor	a		;disable
+	jr	setjopt
 ;
 ;       EQU, ASET, DEFL
 ;
@@ -1394,23 +1421,23 @@ S540:
 ;       NAME
 ;
 S550:
-S552:   push    hl
-        inc     hl              ; point to name buffer
-        ld      c,0             ; init char count
-S553:   ld      a,(de)
-        call    UCASE
-        cp      ' '
-        jr      z,S554
-        ld      (hl),a          ; store name
-        inc     hl
-        inc     de
-        inc     c
-        ld      a,(NAMLEN)
-        cp      c
-        jr      nz,S553
-S554:   pop     hl
-        ld      (hl),c          ; store length of name
-        ret
+;S552:   push    hl
+;        inc     hl              ; point to name buffer
+;        ld      c,0             ; init char count
+;S553:   ld      a,(de)
+;        call    UCASE
+;        cp      ' '
+;        jr      z,S554
+;        ld      (hl),a          ; store name
+;        inc     hl
+;        inc     de
+;        inc     c
+;        ld      a,(NAMLEN)
+;        cp      c
+;        jr      nz,S553
+;S554:   pop     hl
+;        ld      (hl),c          ; store length of name
+;        ret
 ;
 ;       IDENT
 ;
@@ -2125,6 +2152,9 @@ OPCOD4:
         defm    'IRPC'
         defb    24,3,27
         defb    4
+        defm    'JOPT'
+        defb    35,0,27
+        defb    4
         defm    'LDDR'
         defb    0EDh,0B8h,1
         defb    4
@@ -2421,12 +2451,12 @@ SBTTLB: defs    61      ; subtitle buffer (60 chars + trailing null)
 IDLEN:  defs    1       ; length of identifier
 IDBUF:  defs    IDMAX   ; current identifier
 
-NAMLEN: defb    6       ; max REL symbol length (5..8)
+;NAMLEN: defb    6       ; max REL symbol length (5..8)
 
-MODNAM: defs    1       ; length
-        defs    8       ; module name
-MODIDN: defs    1       ; length
-        defs    8       ; module ID
+;MODNAM: defb    0       ; length
+;        defs    8       ; module name
+;MODIDN: defb    0       ; length
+;        defs    8       ; module ID
 
 CPU:    defs    1       ; target CPU type: 0=Z80, 1=Z180, 2=Z280
 DEFCPU: defs    1       ; default CPU type from command line
@@ -2442,9 +2472,8 @@ LEN:    defs    1       ; length of current instruction
 LENDS:  defs    2       ; for DEFS
 CURSEG: defs    1       ; current segment: 40h=TEXT, 80h=DATA, C0h=BSS
 			;	2=custom1, 4=custom2, 8=custom3
-BSSIZE: defs    2       ; BSS segment size
+BSSIZE: defw    0       ; BSS segment size
 PTR1:   defs    2       ; points to next char in REC
-PASSNO: defs    1       ; current pass: 0=pass 1, FF=pass 2
 CURLNE: defs    1       ; current line number for paging output
 EQUFLG: defs    1       ; if non-zero VAL is used instead of PC for print
 LBLFLG: defs    1       ; if non-zero, force PC output to listing
@@ -2478,16 +2507,21 @@ LFLAG:  defs    1       ; listing flag:'A-D' = PRN file destn drive
                         ; 'P' = listing to printer
 OFLAG:  defs    1       ; object flag: 'Z' = no obj, 'A-D' = REL file destn drive
 QFLAG:  defb    0       ; quiet flag
-JFLAG:	defb	0	; if set, check all JP ranges
-JCOUNT:	defw	0	; jump optimization counter
+
+;order of next 4 bytes is mandatory!
+JOPTDIS:defb	0FFH	; 0 = jump optimization disabled
+JFLAG:	defb	0	; if 0FFH, check all JP ranges
 JPASS:	defb	0	; extra pass marker (0FFH = ON)
+PASSNO: defb    0       ; current pass: 0=pass 1, FF=pass 2
+;
+JCOUNT:	defw	0	; jump optimization counter
 UMODE:  defs    1       ; if set, treat all undefined symbols as externals
 ERRFLG: defs    1       ; error character for this line
 ERRCNT: defs    2       ; error count
 MACFLG: defs    1       ; MACRO expansion flag for listing
 SYMPTR: defs    2       ; address of next symbol table entry
 MAXMEM: defs    2       ; maximum usable memory address
-DSPTR:  defs    2       ; pointer to start of dynamic storage
+DSPTR:  defw    0       ; pointer to start of dynamic storage
 PCFLAG: defs    1       ; PC relative value in EVAL
 UFLAG:  defs    1       ; undefined flag from EVAL, 0 = all ok, 1 or >1 = undefined
 EVFLGS: defs    1       ; flag field from last SYMLUK

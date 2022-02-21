@@ -21,6 +21,9 @@
 ;                                                                      ;
 ;**********************************************************************;
 
+	TITLE	Z80AS Macro-Assembler
+	SUBTTL	Expression Evaluation
+
 *include	ZSM.INC
 
 	psect	text
@@ -1418,7 +1421,7 @@ UHIGH:	call	UNARYM
 	ld	h,0
 	ret
 
-;	SUBTTL	'Relocation rules'
+	SUBTTL	'Relocation rules'
 ;
 ; All symbols are in one of the following modes, depending on the
 ; segment under which they are defined:

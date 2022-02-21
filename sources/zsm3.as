@@ -277,68 +277,72 @@ S140:   ld      a,(REGVAL+1)
 ;
 ;       LD      r,(rp+d16)      ; Z280
 ;
-S136:   ld      hl,(REGVAL)
-        ld      a,l
-        cp      6
-        jr      z,S142          ; jump if SP (Z280)
-        ld      a,(SAVVAL)
-        cp      7
-        jp      nz,OERROR       ; only A legal 1st operand
-        ld      a,h
-        ld      c,79h           ; IX
-        cp      0DDh
-        jr      z,S143
-        inc     c               ; IY
-        cp      0FDh
-        jr      z,S143
-        inc     c               ; HL
-S143:   ld      a,0FDh
-        call    EMITB
-        ld      a,c
-        call    EMITB
-        jp      EMITV
+S136:   jp	OERROR		;
+;	ld      hl,(REGVAL)
+;        ld      a,l
+;        cp      6
+;        jr      z,S142          ; jump if SP (Z280)
+;        ld      a,(SAVVAL)
+;        cp      7
+;        jp      nz,OERROR       ; only A legal 1st operand
+;        ld      a,h
+;        ld      c,79h           ; IX
+;        cp      0DDh
+;        jr      z,S143
+;        inc     c               ; IY
+;        cp      0FDh
+;        jr      z,S143
+;        inc     c               ; HL
+;S143:   ld      a,0FDh
+;        call    EMITB
+;        ld      a,c
+;        call    EMITB
+;        jp      EMITV
 ;
 ;       LD      A,(SP+dd)       ; Z280
 ;
-S142:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,(SAVVAL)
-        cp      7
-        jp      nz,OERROR       ; only A legal 1st operand
-        ld      a,0DDh
-        call    EMITB
-        ld      a,78h
-        call    EMITB
-        jp      EMITV
+S142:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,(SAVVAL)
+;        cp      7
+;        jp      nz,OERROR       ; only A legal 1st operand
+;        ld      a,0DDh
+;        call    EMITB
+;        ld      a,78h
+;        call    EMITB
+;        jp      EMITV
 ;
 ;       LD      A,(x+y)         ; Z280
 ;
-S144:   ld      a,(SAVVAL)
-        cp      7
-        jp      nz,OERROR       ; only A legal 1st operand
-        ld      a,0DDh
-        call    EMITB
-        ld      a,b
-        add     a,78h
-        jp      EMITB
+S144:   jp	OERROR		;
+;	ld      a,(SAVVAL)
+;        cp      7
+;        jp      nz,OERROR       ; only A legal 1st operand
+;        ld      a,0DDh
+;        call    EMITB
+;        ld      a,b
+;        add     a,78h
+;        jp      EMITB
 ;
 ;       LD      A,<addr>        ; Z280
 ;       LD      A,(PC+addr)     ; Z280
 ;
-S150:   call    NOLDW           ; LDW not allowed
-        ld      a,(SAVVAL)
-        cp      07h             ; only A allowed as first operand
-        jp      nz,OERROR
-        ld      a,0FDh
-        call    EMITB
-        ld      a,78h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITV         ; emit address if (PC+addr)
-        ld      de,0
-        jp      EMITVR          ; else emit relative address
+S150:   jp	OERROR		;
+;	call    NOLDW           ; LDW not allowed
+;        ld      a,(SAVVAL)
+;        cp      07h             ; only A allowed as first operand
+;        jp      nz,OERROR
+;        ld      a,0FDh
+;        call    EMITB
+;        ld      a,78h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITV         ; emit address if (PC+addr)
+;        ld      de,0
+;        jp      EMITVR          ; else emit relative address
 ;
 ;       LD      rp,...
 ;
@@ -424,111 +428,116 @@ S165:   ld      a,0EDh
 ;
 ;       LD      rp,(rp)         ; Z280
 ;
-S161:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,(REGVAL)
-        cp      6
-        ld      c,04h
-        jr      z,S163A         ; branch if (SP)
-        cp      4
-        jp      nz,OERROR       ; else must be (HL)
+S161:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,(REGVAL)
+;        cp      6
+;        ld      c,04h
+;        jr      z,S163A         ; branch if (SP)
+;        cp      4
+;        jp      nz,OERROR       ; else must be (HL)
 ;
 ;       LD      rp,(HL)         ; Z280
 ;
-        ld      hl,(SAVVAL)     ; get first operand
-        ld      a,h
-        or      a
-        jp      nz,OERROR       ; can't be index register
-S161A:  ld      a,0EDh
-        call    EMITB
-        ld      a,l
-        rlca
-        rlca
-        rlca
-        add     a,06h
-        jp      EMITB
+;        ld      hl,(SAVVAL)     ; get first operand
+;        ld      a,h
+;        or      a
+;        jp      nz,OERROR       ; can't be index register
+;S161A:  ld      a,0EDh
+;        call    EMITB
+;        ld      a,l
+;        rlca
+;        rlca
+;        rlca
+;        add     a,06h
+;        jp      EMITB
 ;
 ;       LD      rp,(IX/IY+d8)   ; Z280
 ;
-S162:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      hl,(SAVVAL)     ; get first operand
-        ld      a,h
-        or      a
-        jr      nz,S163         ; argument is d16 for index register
-        ld      a,(REGVAL+1)
-        call    EMITB           ; emit prefix
-        call    S161A           ; emit instruction bytes
-        ld      a,(VAL)
-        jp      EMITB           ; emit displacement
+S162:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      hl,(SAVVAL)     ; get first operand
+;        ld      a,h
+;        or      a
+;        jr      nz,S163         ; argument is d16 for index register
+;        ld      a,(REGVAL+1)
+;        call    EMITB           ; emit prefix
+;        call    S161A           ; emit instruction bytes
+;        ld      a,(VAL)
+;        jp      EMITB           ; emit displacement
 ;
 ;       LD      rp,(rp+d16)     ; Z280
 ;
-S163:   ld      hl,(REGVAL)
-        ld      a,l
-        cp      6
-        ld      c,04h
-        jr      z,S163A         ; branch if (SP)
-        ld      a,h
-        ld      c,2Ch           ; IX
-        cp      0DDh
-        jr      z,S163A
-        ld      c,34h           ; IY
-        cp      0FDh
-        jr      z,S163A
-        ld      c,3Ch           ; HL
-S163A:  ld      de,(SAVVAL)
-        ld      a,e
-        cp      4
-        jp      nz,OERROR       ; 1st operand can be only HL/IX/IY
-        ld      a,d
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-        ld      a,0EDh
-        call    EMITB
-        ld      a,c
-        call    EMITB
-        jp      EMITV
+S163:   jp	OERROR		;
+;	ld      hl,(REGVAL)
+;        ld      a,l
+;        cp      6
+;        ld      c,04h
+;        jr      z,S163A         ; branch if (SP)
+;        ld      a,h
+;        ld      c,2Ch           ; IX
+;        cp      0DDh
+;        jr      z,S163A
+;        ld      c,34h           ; IY
+;        cp      0FDh
+;        jr      z,S163A
+;        ld      c,3Ch           ; HL
+;S163A:  ld      de,(SAVVAL)
+;        ld      a,e
+;        cp      4
+;        jp      nz,OERROR       ; 1st operand can be only HL/IX/IY
+;        ld      a,d
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,c
+;        call    EMITB
+;        jp      EMITV
 ;
 ;       LD      rp,(x+y)        ; Z280
 ;
-S164:   ld      de,(SAVVAL)
-        ld      a,e
-        cp      4
-        jp      nz,OERROR       ; 1st operand can be only HL/IX/IY
-        ld      a,d
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-        ld      a,0EDh
-        call    EMITB
-        ld      a,b
-        rlca
-        rlca
-        rlca
-        add     a,04h
-        jp      EMITB
+S164:   jp	OERROR		;
+;	ld      de,(SAVVAL)
+;        ld      a,e
+;        cp      4
+;        jp      nz,OERROR       ; 1st operand can be only HL/IX/IY
+;        ld      a,d
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,b
+;        rlca
+;        rlca
+;        rlca
+;        add     a,04h
+;        jp      EMITB
 ;
 ;       LD      rp,<addr>       ; Z280
 ;       LD      rp,(PC+addr)    ; Z280
 ;
-S166:   ld      hl,(SAVVAL)     ; test 1st operand
-        ld      a,l
-        cp      4
-        jp      nz,OERROR       ; only HL/IX/IY allowed
-        ld      a,h
-        or      a
-        call    nz,EMITB        ; emit prefix if IX or IY
-        ld      a,0EDh
-        call    EMITB
-        ld      a,24h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITV         ; emit address if (PC+addr)
-        ld      de,0
-        jp      EMITVR          ; else emit relative address
+S166:   jp	OERROR		;
+;	ld      hl,(SAVVAL)     ; test 1st operand
+;        ld      a,l
+;        cp      4
+;        jp      nz,OERROR       ; only HL/IX/IY allowed
+;        ld      a,h
+;        or      a
+;        call    nz,EMITB        ; emit prefix if IX or IY
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,24h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITV         ; emit address if (PC+addr)
+;        ld      de,0
+;        jp      EMITVR          ; else emit relative address
 ;
 ;       LD      (...)
 ;
@@ -569,29 +578,30 @@ S187:   call    REQCHR
 ;
 ;       LD      (addr),val      ; Z280
 ;
-S187A:  ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,(OPCODE)
-        or      a
-        jr      nz,S188         ; LDW specified, use long form
-        ld      a,(EVMODE)
-        call    CHK8U
-        jr      nz,S188
-        ld      a,0DDh
-        call    EMITB
-        ld      a,03Eh
-        call    EMITB
-        call    EMITSV          ; emit address
-        ld      a,(VAL)
-        jp      EMITB           ; emit value
+S187A:  jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,(OPCODE)
+;        or      a
+;        jr      nz,S188         ; LDW specified, use long form
+;        ld      a,(EVMODE)
+;        call    CHK8U
+;        jr      nz,S188
+;        ld      a,0DDh
+;        call    EMITB
+;        ld      a,03Eh
+;        call    EMITB
+;        call    EMITSV          ; emit address
+;        ld      a,(VAL)
+;        jp      EMITB           ; emit value
 ;
-S188:   ld      a,0DDh
-        call    EMITB
-        ld      a,11h
-        call    EMITB
-        call    EMITSV          ; emit address
-        jp      EMITV           ; emit value
+;S188:   ld      a,0DDh
+;        call    EMITB
+;        ld      a,11h
+;        call    EMITB
+;        call    EMITSV          ; emit address
+;        jp      EMITV           ; emit value
 ;
 ;       LD      (addr),rp
 ;
@@ -617,65 +627,68 @@ S196:   ld      a,0EDh
 ;
 ;       LD      (x+y),...       ; Z280
 ;
-S197:   call    REQCHR
-        defb    ','
-        push    bc
-        call    EVALREG
-        pop     bc
-        cp      RPNAME
-        jr      z,S198          ; branch if second operand rpair
-        cp      RNAME
-        jr      nz,S199         ; branch if not single reg
+S197:   jp	OERROR		;
+;	call    REQCHR
+;        defb    ','
+;        push    bc
+;        call    EVALREG
+;        pop     bc
+;        cp      RPNAME
+;        jr      z,S198          ; branch if second operand rpair
+;        cp      RNAME
+;        jr      nz,S199         ; branch if not single reg
 ;
 ;       LD      (x+y),A         ; Z280
 ;
-        call    NOLDW           ; can't be LDW
-        ld      a,l
-        cp      07h             ; only A allowed
-        jp      nz,OERROR
-        ld      a,0EDh
-        call    EMITB
-        ld      a,b
-        rlca
-        rlca
-        rlca
-        add     a,03h
-        jp      EMITB
+;        call    NOLDW           ; can't be LDW
+;        ld      a,l
+;        cp      07h             ; only A allowed
+;        jp      nz,OERROR
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,b
+;        rlca
+;        rlca
+;        rlca
+;        add     a,03h
+;        jp      EMITB
 ;
 ;       LD      (x+y),rp        ; Z280
 ;
-S198:   ld      a,l
-        cp      4
-        jp      nz,OERROR       ; must be HL/IX/IY
-        ld      a,h
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-        ld      a,0EDh
-        call    EMITB
-        ld      a,b
-        rlca
-        rlca
-        rlca
-        add     a,05h
-        jp      EMITB
+S198:   jp	OERROR		;
+;	ld      a,l
+;        cp      4
+;        jp      nz,OERROR       ; must be HL/IX/IY
+;        ld      a,h
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,b
+;        rlca
+;        rlca
+;        rlca
+;        add     a,05h
+;        jp      EMITB
 ;
 ;       LD      (x+y),n         ; Z280
 ;
-S199:   call    NOLDW           ; can't be LDW
-        ld      a,0DDh
-        call    EMITB
-        ld      a,b
-        rlca
-        rlca
-        rlca
-        add     a,06h
-        call    EMITB
-        ld      hl,(VAL)
-        ld      a,(EVMODE)
-        call    CHK8U
-        call    nz,VALERR       ; must be 8-bit value
-        ld      a,l
-        jp      EMITB
+S199:   jp	OERROR		;
+;	call    NOLDW           ; can't be LDW
+;        ld      a,0DDh
+;        call    EMITB
+;        ld      a,b
+;        rlca
+;        rlca
+;        rlca
+;        add     a,06h
+;        call    EMITB
+;        ld      hl,(VAL)
+;        ld      a,(EVMODE)
+;        call    CHK8U
+;        call    nz,VALERR       ; must be 8-bit value
+;        ld      a,l
+;        jp      EMITB
 ;
 ;       LD      (rp),...
 ;
@@ -709,124 +722,127 @@ S200:   call    SAVVARS         ; SAVVAL,SAVMOD,SAVCHN <- VAL,EVMODE,EXTCHN
 ;
 ;       LD      (rp+d16),...    ; Z280
 ;
-S202:   call    SAVVARS         ; SAVVAL,SAVMOD,SAVCHN <- VAL,EVMODE,EXTCHN
-        call    REQCHR
-        defb    ','
-        call    EVALREG         ; evaluate second operand
-        ld      hl,(REGVAL)
-        ld      a,l
-        cp      6
-        jp      z,S201          ; branch if 1st operand (SP) (Z280)
-        ld      a,(EVFLGS)      ; test 2nd operand
-        cp      RNAME
-        jr      z,S203A         ; branch if single reg
-        cp      RPNAME
-        jr      z,S203B         ; branch if rpair
+S202:   jp	OERROR		;
+;	call    SAVVARS         ; SAVVAL,SAVMOD,SAVCHN <- VAL,EVMODE,EXTCHN
+;        call    REQCHR
+;        defb    ','
+;        call    EVALREG         ; evaluate second operand
+;        ld      hl,(REGVAL)
+;        ld      a,l
+;        cp      6
+;        jp      z,S201          ; branch if 1st operand (SP) (Z280)
+;        ld      a,(EVFLGS)      ; test 2nd operand
+;        cp      RNAME
+;        jr      z,S203A         ; branch if single reg
+;        cp      RPNAME
+;        jr      z,S203B         ; branch if rpair
 ;
 ;       LD      (rp+d16),n8
 ;
-        call    NOLDW           ; 8-bit immediate value, LDW not allowed
-        ld      a,(REGVAL+1)
-        cp      0DDh
-        ld      c,0Eh           ; IX
-        jr      z,S203C
-        cp      0FDh
-        ld      c,16h           ; IY
-        jr      z,S203C
-        ld      c,1Eh           ; HL
-S203C:  ld      a,0FDh
-S213C:  call    EMITB
-        ld      a,c
-        call    EMITB
-        call    EMITSV          ; emit displacement
-        ld      hl,(VAL)
-        ld      a,(EVMODE)
-        call    REQ8U
-        ld      a,l
-        jp      EMITB
+;        call    NOLDW           ; 8-bit immediate value, LDW not allowed
+;        ld      a,(REGVAL+1)
+;        cp      0DDh
+;        ld      c,0Eh           ; IX
+;        jr      z,S203C
+;        cp      0FDh
+;        ld      c,16h           ; IY
+;        jr      z,S203C
+;        ld      c,1Eh           ; HL
+;S203C:  ld      a,0FDh
+;S213C:  call    EMITB
+;        ld      a,c
+;        call    EMITB
+;        call    EMITSV          ; emit displacement
+;        ld      hl,(VAL)
+;        ld      a,(EVMODE)
+;        call    REQ8U
+;        ld      a,l
+;        jp      EMITB
 ;
 ;       LD      (rp+d16),A      ; Z280
 ;
-S203A:  call    NOLDW           ; LDW not allowed
-        ld      a,(VAL)
-        cp      7
-        jp      nz,OERROR       ; only A is legal
-        ld      a,(REGVAL+1)
-        cp      0DDh
-        ld      c,2Bh           ; IX
-        jr      z,S203D
-        cp      0FDh
-        ld      c,33h           ; IY
-        jr      z,S203D
-        ld      c,3Bh           ; HL
-S203D:  ld      a,0EDh
-        call    EMITB
-        ld      a,c
-        call    EMITB
-        jp      EMITSV
+S203A:  jp	OERROR		;
+;	call    NOLDW           ; LDW not allowed
+;        ld      a,(VAL)
+;        cp      7
+;        jp      nz,OERROR       ; only A is legal
+;        ld      a,(REGVAL+1)
+;        cp      0DDh
+;        ld      c,2Bh           ; IX
+;        jr      z,S203D
+;        cp      0FDh
+;        ld      c,33h           ; IY
+;        jr      z,S203D
+;        ld      c,3Bh           ; HL
+;S203D:  ld      a,0EDh
+;        call    EMITB
+;        ld      a,c
+;        call    EMITB
+;        jp      EMITSV
 ;
 ;       LD      (rp+d16),rp     ; Z280
 ;
-S203B:  ld      hl,(VAL)
-        ld      a,l
-        cp      4
-        jp      nz,OERROR       ; only HL/IX/IY allowed
-        ld      a,h
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-S203F:  ld      a,(REGVAL+1)
-        cp      0DDh
-        ld      c,2Dh           ; IX
-        jr      z,S203E
-        cp      0FDh
-        ld      c,35h           ; IY
-        jr      z,S203E
-        ld      c,3Dh           ; HL
-S203E:  ld      a,0EDh
-        call    EMITB
-        ld      a,c
-        call    EMITB
-        jp      EMITSV
+;S203B:  ld      hl,(VAL)
+;        ld      a,l
+;        cp      4
+;        jp      nz,OERROR       ; only HL/IX/IY allowed
+;        ld      a,h
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;S203F:  ld      a,(REGVAL+1)
+;        cp      0DDh
+;        ld      c,2Dh           ; IX
+;        jr      z,S203E
+;        cp      0FDh
+;        ld      c,35h           ; IY
+;        jr      z,S203E
+;        ld      c,3Dh           ; HL
+;S203E:  ld      a,0EDh
+;        call    EMITB
+;        ld      a,c
+;        call    EMITB
+;        jp      EMITSV
 ;
 ;       LD      (SP+d16),...    ; Z280 only
 ;
-S201:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,(EVFLGS)      ; test 2nd operand
-        cp      RNAME
-        jr      z,S201A         ; branch if single reg
-        cp      RPNAME
-        jr      z,S201B         ; branch if rpair
+S201:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,(EVFLGS)      ; test 2nd operand
+;        cp      RNAME
+;        jr      z,S201A         ; branch if single reg
+;        cp      RPNAME
+;        jr      z,S201B         ; branch if rpair
 ;
 ;       LD      (SP+d16),n8
 ;
-        call    NOLDW           ; 8-bit immediate value, LDW not allowed
-        ld      c,06h
-        ld      a,0DDh
-        jp      S213C
+;        call    NOLDW           ; 8-bit immediate value, LDW not allowed
+;        ld      c,06h
+;        ld      a,0DDh
+;        jp      S213C
 ;
 ;       LD      (SP+d16),A      ; Z280
 ;
-S201A:  call    NOLDW           ; LDW not allowed
-        ld      a,(VAL)
-        cp      7
-        jp      nz,OERROR       ; only A is legal
-        ld      c,03h
-        jp      S203E
+;S201A:  call    NOLDW           ; LDW not allowed
+;        ld      a,(VAL)
+;        cp      7
+;        jp      nz,OERROR       ; only A is legal
+;        ld      c,03h
+;        jp      S203E
 ;
 ;       LD      (SP+d16),rp     ; Z280
 ;
-S201B:  ld      hl,(VAL)
-        ld      a,l
-        cp      4
-        jp      nz,OERROR       ; only HL/IX/IY allowed
-        ld      a,h
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-        ld      c,05h
-        ld      a,0EDh
-        jp      S203E
+;S201B:  ld      hl,(VAL)
+;        ld      a,l
+;        cp      4
+;        jp      nz,OERROR       ; only HL/IX/IY allowed
+;        ld      a,h
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;        ld      c,05h
+;        ld      a,0EDh
+;        jp      S203E
 ;
 ;       LD      (HL),...
 ;
@@ -869,20 +885,21 @@ S205:   ld      a,36h
 ;
 ;       LD      (HL),rp         ; Z280
 ;
-S208:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,h
-        or      a
-        jp      nz,OERROR       ; index register not allowed
-S208A:  ld      a,0EDh
-        call    EMITB
-        ld      a,l
-        rlca
-        rlca
-        rlca
-        add     a,0Eh
-        jp      EMITB
+S208:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,h
+;        or      a
+;        jp      nz,OERROR       ; index register not allowed
+;S208A:  ld      a,0EDh
+;        call    EMITB
+;        ld      a,l
+;        rlca
+;        rlca
+;        rlca
+;        add     a,0Eh
+;        jp      EMITB
 ;
 ;       LD      (HL),r
 ;
@@ -921,16 +938,17 @@ S210:   ld      hl,(VAL)
 ;
 ;       LD      (IX/IY+d8),rp   ; Z280
 ;
-S215:   ld      a,(CPU)
-        cp      2
-        jp      nz,OERROR       ; Z280 only
-        ld      a,h
-        or      a
-        jp      nz,S203B        ; use d16 form if 2nd operand is index register
-        ld      a,(REGVAL+1)
-        call    EMITB           ; emit prefix
-        call    S208A
-        jr      S218A
+S215:   jp	OERROR		;
+;	ld      a,(CPU)
+;        cp      2
+;        jp      nz,OERROR       ; Z280 only
+;        ld      a,h
+;        or      a
+;        jp      nz,S203B        ; use d16 form if 2nd operand is index register
+;        ld      a,(REGVAL+1)
+;        call    EMITB           ; emit prefix
+;        call    S208A
+;        jr      S218A
 ;
 ;       LD      (IX/IY+d8),r
 ;
@@ -950,87 +968,88 @@ S218A:  ld      a,(SAVVAL)
 ;       LD      <addr>,...      ; Z280
 ;       LD      (PC+addr),...   ; Z280
 ;
-S219:   push    bc              ; remember <addr> or (PC+addr) code
-        call    REQCHR
-        defb    ','
-        call    EVALREG
-        pop     bc
-        cp      RPNAME
-        jr      z,S219A         ; branch if second operand rpair
-        cp      RNAME
-        jr      nz,S219B        ; branch if not single reg
+S219:   jp	OERROR		;
+;	push    bc              ; remember <addr> or (PC+addr) code
+;        call    REQCHR
+;        defb    ','
+;        call    EVALREG
+;        pop     bc
+;        cp      RPNAME
+;        jr      z,S219A         ; branch if second operand rpair
+;        cp      RNAME
+;        jr      nz,S219B        ; branch if not single reg
 ;
 ;       LD      <addr>,A        ; Z280
 ;       LD      (PC+addr),A     ; Z280
 ;
-        call    NOLDW           ; can't be LDW
-        ld      a,l
-        cp      07h             ; only A allowed
-        jp      nz,OERROR
-        ld      a,0EDh
-        call    EMITB
-        ld      a,23h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITSV        ; emit address if (PC+addr)
-        ld      de,0
-        jp      EMITSR          ; else emit relative address
+;        call    NOLDW           ; can't be LDW
+;        ld      a,l
+;        cp      07h             ; only A allowed
+;        jp      nz,OERROR
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,23h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITSV        ; emit address if (PC+addr)
+;        ld      de,0
+;        jp      EMITSR          ; else emit relative address
 ;
 ;       LD      <addr>,val      ; Z280
 ;       LD      (PC+addr),val   ; Z280
 ;
-S219B:  ld      a,(OPCODE)
-        or      a
-        jr      nz,S219E        ; LDW specified, use long form
-        ld      a,(EVMODE)
-        call    CHK8U           ; else check operand size
-        jr      nz,S219E        ; branch if long
-        ld      a,0FDh          ; else use short form
-        call    EMITB
-        ld      a,06h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jr      z,S219C         ; branch if (PC+addr)
-        ld      de,-1
-        call    EMITSR          ; emit relative address if <addr>
-        jr      S219D
-S219C:  call    EMITSV          ; else emit unmodified address
-S219D:  ld      a,(VAL)
-        jp      EMITB
+;S219B:  ld      a,(OPCODE)
+;        or      a
+;        jr      nz,S219E        ; LDW specified, use long form
+;        ld      a,(EVMODE)
+;        call    CHK8U           ; else check operand size
+;        jr      nz,S219E        ; branch if long
+;        ld      a,0FDh          ; else use short form
+;        call    EMITB
+;        ld      a,06h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jr      z,S219C         ; branch if (PC+addr)
+;        ld      de,-1
+;        call    EMITSR          ; emit relative address if <addr>
+;        jr      S219D
+;S219C:  call    EMITSV          ; else emit unmodified address
+;S219D:  ld      a,(VAL)
+;        jp      EMITB
 ;
-S219E:  ld      a,0DDh
-        call    EMITB
-        ld      a,31h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jr      z,S219F         ; branch if (PC+addr)
-        ld      de,-2
-        call    EMITSR          ; emit relative address if <addr>
-        jp      EMITV
-S219F:  call    EMITSV          ; else emit unmodified address
-        jp      EMITV
+;S219E:  ld      a,0DDh
+;        call    EMITB
+;        ld      a,31h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jr      z,S219F         ; branch if (PC+addr)
+;        ld      de,-2
+;        call    EMITSR          ; emit relative address if <addr>
+;        jp      EMITV
+;S219F:  call    EMITSV          ; else emit unmodified address
+;        jp      EMITV
 ;
 ;       LD      <addr>,rp       ; Z280
 ;       LD      (PC+addr),rp    ; Z280
 ;
-S219A:  ld      a,l
-        cp      4
-        jp      nz,OERROR       ; only HL/IX/IY allowed
-        ld      a,h
-        or      a
-        call    nz,EMITB        ; emit prefix if index register
-        ld      a,0EDh
-        call    EMITB
-        ld      a,25h
-        call    EMITB
-        ld      a,c
-        cp      6
-        jp      z,EMITSV        ; emit address if (PC+addr)
-        ld      de,0
-        jp      EMITSR          ; else emit relative address
+;S219A:  ld      a,l
+;        cp      4
+;        jp      nz,OERROR       ; only HL/IX/IY allowed
+;        ld      a,h
+;        or      a
+;        call    nz,EMITB        ; emit prefix if index register
+;        ld      a,0EDh
+;        call    EMITB
+;        ld      a,25h
+;        call    EMITB
+;        ld      a,c
+;        cp      6
+;        jp      z,EMITSV        ; emit address if (PC+addr)
+;        ld      de,0
+;        jp      EMITSR          ; else emit relative address
 ;
 ;       Set syntax error flag if the instruction is LDW
 ;

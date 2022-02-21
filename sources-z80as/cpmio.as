@@ -21,6 +21,8 @@
 ;                                                                      ;
 ;**********************************************************************;
 
+	TITLE	Z80AS Macro-Assembler
+
 *include	ZSM.INC
 
 ;public
@@ -49,7 +51,7 @@ LBUFSZ	equ	512		; listing buffer size
 
 	psect	text
 
-;	SUBTTL	Initializations and command loop
+	SUBTTL	Initializations and command loop
 ;
 ;	System-dependent initializations
 ;
@@ -385,7 +387,7 @@ TEST3:	inc	hl
 	pop	de
 	jr	TEST1
 
-;	SUBTTL	Console, Printer and File I/O
+	SUBTTL	Console, Printer and File I/O
 
 ;	ENTRY - Used to call BDOS - Saves and restores registers
 

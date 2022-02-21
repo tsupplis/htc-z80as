@@ -243,13 +243,13 @@
         global  MDFLVL,MACLVL,FNDREC,MSTORE,GNRMAC
         global  EXPMAC,CVTNUM
 
-        global  PASSNO,MODNAM,MODIDN,BSSIZE     ;CSSIZE,DSSIZE
+        global  PASSNO     ;CSSIZE,DSSIZE,BSSIZE
         global  EFLG,ENDADR,ENDMOD	;,PHFLAG,UPDSIZ,SELCMN,
         global  QFLAG,COMNTC,LOCFLG,ASEGPC,CSEGPC,DSEGPC,BSEGPC
 	global	CUST1SEGPC,CUST2SEGPC,CUST3SEGPC
         global  LCLNUM,CMPSYM,OPCODE,TYPTBL     ;LASTCM,
 
-        global  S552,S321,S662,SWITCH,MERROR,SETMDF,PERROR
+        global  S321,S662,SWITCH,MERROR,SETMDF,PERROR
 
 	global	ID_OR_NUMBER
 	global	TempCnt
@@ -260,22 +260,22 @@
 ;       Init fields
 ;
 Z80ASM: ld      hl,(MAXMEM)
-        ld      (hl),0          ; init dynamic storage
-        ld      (DSPTR),hl
+;        ld      (hl),0          ; init dynamic storage
+;        ld      (DSPTR),hl
         ld      hl,(SYMTBL)
         ld      (SYMPT),hl
         call    RESETP          ; reset variables
         ld      a,DEFLNP
         ld      (MAXLNE),a      ; set default lines per page
         ld      (CURLNE),a      ; set up for head of form on first print
-        xor     a
-        ld      (PASSNO),a      ; indicate pass 1
-        ld      (MDFLVL),a      ; reset MACRO definition
-        ld      (MACLVL),a      ;  and expansion levels
-        ld      (MODNAM),a
-        ld      (MODIDN),a
-        ld      hl,0
-        ld      (BSSIZE),hl     ; clear BSS segment size
+;        xor     a
+;        ld      (PASSNO),a      ; indicate pass 1
+;        ld      (MDFLVL),a      ; reset MACRO definition
+;        ld      (MACLVL),a      ;  and expansion levels
+;        ld      (MODNAM),a
+;        ld      (MODIDN),a
+;        ld      hl,0
+;        ld      (BSSIZE),hl     ; clear BSS segment size
         call    INIOBJ
         ld      hl,HOFPG
         ld      (hl),' '
@@ -533,6 +533,11 @@ ENDIT4: ld      a,(LFLAG)
         cp      'O'             ; file asked for?
         call    c,CLOSE1        ; yes, close it
         call    CLSINP          ; close input file
+	ld	hl,(ERRCNT)
+	ld	a,l
+	or	h
+	ret	nz
+	ld	(80H),hl	; mark Z80AS success
         ret                     ; exit
 
 ERMSG:  defb    CR,LF

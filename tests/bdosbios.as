@@ -1,3 +1,15 @@
+;    	For RC2014 with 64MB CF
+;    	at LINK : -pbdos=0DA00H,bios=0F000H,top=0FFFEH
+;
+;	configured for SC110 (SIO)
+
+ACIA	equ	0	;1=ACIA, 0=KIO or SIO
+KIO	equ	0	;1=KIO's SIO, 0=SC110's SIO
+
+	psect	bdos
+
+;	org	0DA00H
+
 ;**************************************************************
 ;*
 ;*             C P / M   version   2 . 2
@@ -37,8 +49,6 @@ CNTRLZ      EQU 1AH            ;control-z (end-of-file mark)
 DEL         EQU 7FH            ;rubout
 ;
 ;   Set origin for CP/M
-;
-            ORG 0D000H
 ;
 CBASE:      JP COMMAND          ;execute command processor (ccp).
             JP CLEARBUF         ;entry to empty input buffer before starting ccp.
@@ -603,18 +613,50 @@ CLEARBUF:   XOR A
 ;*
 ;**************************************************************
 ;*
-COMMAND:    LD SP,CCPSTACK      ;setup stack area.                                                
-            PUSH BC             ;note that (C) should be equal to:                                
-            LD A,C              ;(uuuudddd) where 'uuuu' is the user number                       
-            RRA                 ;and 'dddd' is the drive number.                                  
-@:            RRA                                                                                 
-            JP NZ,CMMND2        ;yes, we just process it.                                         
-CMMND1:     LD SP,CCPSTACK      ;set stack straight.                                              
-CMMND2:     LD DE,TBUFF                                                                           
-XXXXX:            LD A,(CHGDRV)       ;if a change in drives was indicated,                       
-            OR A                ;then treat this as an unknown command                            
-            JP NZ,UNKNOWN       ;which gets executed.                                             
-            CALL SEARCH         ;else search command table for a match.                           
+COMMAND:    LD SP,CCPSTACK      ;setup stack area.
+            PUSH BC             ;note that (C) should be equal to:
+            LD A,C              ;(uuuudddd) where 'uuuu' is the user number
+            RRA                 ;and 'dddd' is the drive number.
+            RRA
+            RRA
+            RRA
+            AND 0FH             ;isolate the user number.
+            LD E,A
+            CALL GETSETUC       ;and set it.
+            CALL RESDSK         ;reset the disk system.
+            LD (BATCH),A        ;clear batch mode flag.
+            POP BC
+            LD A,C
+            AND 0FH             ;isolate the drive number.
+            LD (CDRIVE),A       ;and save.
+            CALL DSKSEL         ;...and select.
+            LD A,(INBUFF+1)
+            OR A                ;anything in input buffer already?
+            JP NZ,CMMND2        ;yes, we just process it.
+;
+;   Entry point to get a command line from the console.
+;
+CMMND1:     LD SP,CCPSTACK      ;set stack straight.
+            CALL CRLF           ;start a new line on the screen.
+            CALL GETDSK         ;get current drive.
+            ADD A,'A'
+            CALL PRINT          ;print current drive.
+            LD A,'>'
+            CALL PRINT          ;and add prompt.
+            CALL GETINP         ;get line from user.
+;
+;   Process command line here.
+;
+CMMND2:     LD DE,TBUFF
+            CALL DMASET         ;set standard dma address.
+            CALL GETDSK
+            LD (CDRIVE),A       ;set current drive.
+            CALL CONVFST        ;convert name typed in.
+            CALL NZ,SYNERR      ;wild cards are not allowed.
+            LD A,(CHGDRV)       ;if a change in drives was indicated,
+            OR A                ;then treat this as an unknown command
+            JP NZ,UNKNOWN       ;which gets executed.
+            CALL SEARCH         ;else search command table for a match.
 ;
 ;   Note that an unknown command returns
 ; with (A) pointing to the last address
@@ -3689,3 +3731,962 @@ CKSUMTBL:   DEFB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 ;*
 ;******************   E N D   O F   C P / M   *****************
 ;*
+
+	psect	bios
+
+;	org	0F000H
+
+;==================================================================================
+; This is Grant Searle's code, modified for use with Small Computer Workshop IDE.
+; Compile options added for LiNC80 and RC2014 systems to set correct addresses.
+; Warning: This may not be the same as the 'official' BIOS for each retro system.
+; Changes marked with '<SCC>'
+; SCC 2018-04-13
+; Added option for 64MB compact flash.
+; JL 2018-04-28
+;==================================================================================
+; Contents of this file are copyright Grant Searle
+; Blocking/unblocking routines are the published version by Digital Research
+; (bugfixed, as found on the web)
+;
+; You have permission to use this for NON COMMERCIAL USE ONLY
+; If you wish to use it elsewhere, please include an acknowledgement to myself.
+;
+; http://searle.hostei.com/grant/index.html
+;
+; eMail: home.micros01@btinternet.com
+;
+; If the above don't work, please perform an Internet search to see if I have
+; updated the web page hosting service.
+;
+;==================================================================================
+
+ccp         EQU 0DA00h         ; Base of CCP.
+bdos        EQU ccp + 0806h    ; Base of BDOS.
+bios        EQU ccp + 1600h    ; Base of BIOS.
+
+; Set CP/M low memory datA, vector and buffer addresses.
+
+iobyte      EQU 03h            ; Intel standard I/O definition byte.
+userdrv     EQU 04h            ; Current user number and drive.
+tpabuf      EQU 80h            ; Default I/O buffer and command line storage.
+
+COND	ACIA
+
+ACIA_C	equ	80H
+ACIA_D	equ	81H
+
+; ACIA Control register values
+ACIA_Reset	equ 	00000011B     ;Master reset
+ACIA_Init	equ	00010110B     ;No int, RTS low, 8+1, /64
+
+; ACIA Status (control) register bit numbers
+; 0 Receive data available bit number
+; 1 Transmit data empty bit number
+
+ENDC
+
+COND	1-ACIA
+
+COND	KIO
+SIOA_D      EQU 88H
+SIOA_C      EQU 89H
+SIOB_D      EQU 8AH
+SIOB_C      EQU 8BH
+ENDC
+
+COND	1-KIO
+SIOA_D      EQU 81H
+SIOA_C      EQU 80H
+SIOB_D      EQU 83H
+SIOB_C      EQU 82H
+ENDC
+
+ENDC
+
+blksiz      EQU 4096           ;CP/M allocation size
+hstsiz      EQU 512            ;host disk sector size
+hstspt      EQU 32             ;host disk sectors/trk
+hstblk      EQU hstsiz/128     ;CP/M sects/host buff
+cpmspt      EQU hstblk * hstspt  ;CP/M sectors/track
+secmsk      EQU hstblk-1       ;sector mask
+
+wrall       EQU 0              ;write to allocated
+wrdir       EQU 1              ;write to directory
+wrual       EQU 2              ;write to unallocated
+
+; CF registers
+CF_DATA     EQU 10H
+CF_FEATURES EQU 11H
+CF_ERROR    EQU 11H
+CF_SECCOUNT EQU 12H
+CF_SECTOR   EQU 13H
+CF_CYL_LOW  EQU 14H
+CF_CYL_HI   EQU 15H
+CF_HEAD     EQU 16H
+CF_STATUS   EQU 17H
+CF_COMMAND  EQU 17H
+CF_LBA0     EQU 13H
+CF_LBA1     EQU 14H
+CF_LBA2     EQU 15H
+CF_LBA3     EQU 16H
+
+;CF Features
+CF_8BIT     EQU 1
+CF_NOCACHE  EQU 082H
+;CF Commands
+CF_READ_SEC EQU 020H
+CF_WRITE_SEC EQU 030H
+CF_SET_FEAT EQU  0EFH
+
+LF          EQU 0AH            ;line feed
+FF          EQU 0CH            ;form feed
+CR          EQU 0DH            ;carriage RETurn
+
+;================================================================================================
+
+
+            JP boot             ;  0 Initialize.
+wboote:     JP WBOOT            ;  1 Warm boot.
+        JP      CONST
+        JP      CONIN
+        JP      CONOUT
+        JP      LIST
+        JP      PUNCH
+        JP      READER
+        JP      HOME
+        JP      SELDSK
+        JP      SETTRK
+        JP      SETSEC
+        JP      SETDMA
+        JP      READ
+        JP      WRITE
+        JP      PRSTAT
+        JP      SECTRN
+
+;================================================================================================
+; Disk parameter headers for disk 0 to 15
+;================================================================================================
+dpbase:
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb0,0000h,alv00
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv01
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv02
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv03
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv04
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv05
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpb,0000h,alv06
+            DEFW 0000h,0000h,0000h,0000h,dirbf,dpbLast,0000h,alv07
+
+; First drive has a reserved track for CP/M
+dpb0:
+            DEFW 128             ;SPT - sectors per track
+            DEFB 5               ;BSH - block shift factor
+            DEFB 31              ;BLM - block mask
+            DEFB 1               ;EXM - Extent mask
+            DEFW 2043            ; (2047-4) DSM - Storage size (blocks - 1)
+            DEFW 511             ;DRM - Number of directory entries - 1
+            DEFB 240             ;AL0 - 1 bit set per directory block
+            DEFB 0               ;AL1 -            '
+            DEFW 0               ;CKS - DIR check vector size (DRM+1)/4 (0=fixed disk)
+            DEFW 1               ;OFF - Reserved tracks
+
+dpb:
+            DEFW 128             ;SPT - sectors per track
+            DEFB 5               ;BSH - block shift factor
+            DEFB 31              ;BLM - block mask
+            DEFB 1               ;EXM - Extent mask
+            DEFW 2047            ;DSM - Storage size (blocks - 1)
+            DEFW 511             ;DRM - Number of directory entries - 1
+            DEFB 240             ;AL0 - 1 bit set per directory block
+            DEFB 0               ;AL1 -            '
+            DEFW 0               ;CKS - DIR check vector size (DRM+1)/4 (0=fixed disk)
+            DEFW 0               ;OFF - Reserved tracks
+
+; Last drive is smaller because CF is never full 64MB or 128MB
+
+dpbLast:
+            DEFW 128             ;SPT - sectors per track
+            DEFB 5               ;BSH - block shift factor
+            DEFB 31              ;BLM - block mask
+            DEFB 1               ;EXM - Extent mask
+            DEFW 1279            ;DSM - Storage size (blocks - 1)  ; 1279 = 5MB (for 64MB card)
+            DEFW 511             ;DRM - Number of directory entries - 1
+            DEFB 240             ;AL0 - 1 bit set per directory block
+            DEFB 0               ;AL1 -            '
+            DEFW 0               ;CKS - DIR check vector size (DRM+1)/4 (0=fixed disk)
+            DEFW 0               ;OFF - Reserved tracks
+
+;================================================================================================
+; Cold boot
+;================================================================================================
+
+boot:
+            DI                  ; Disable interrupts.
+            LD SP,biosstack     ; Set default stack.
+
+            CALL printInline
+
+; <JL> Added branding :) Upped version to 1.2 because of two sets of changes
+; <SCC> Copied branding and version to RC2014 :(
+            DEFM 'RC2014 CP/M BIOS 1.2 by G. Searle 2007-18'
+            DEFB CR,LF
+            DEFB CR,LF
+            DEFM 'CP/M 2.2 '
+            DEFM 'Copyright'
+            DEFM ' 1979 (c) by Digital Research'
+            DEFB CR,LF,0
+
+            CALL cfWait
+            LD  A,CF_8BIT       ; Set IDE to be 8bit
+            OUT (CF_FEATURES),A
+            LD A,CF_SET_FEAT
+            OUT (CF_COMMAND),A
+
+            CALL cfWait
+            LD  A,CF_NOCACHE    ; No write cache
+            OUT (CF_FEATURES),A
+            LD A,CF_SET_FEAT
+            OUT (CF_COMMAND),A
+
+            XOR A               ; Clear I/O & drive bytes.
+            LD (userdrv),A
+
+            JP gocpm
+
+;================================================================================================
+; Warm boot
+;================================================================================================
+
+WBOOT:
+            DI                  ; Disable interrupts.
+            LD SP,biosstack     ; Set default stack.
+
+            LD B,11             ; Number of sectors to reload
+
+            LD A,5              ; skip first 5 (0A00H)
+            LD (hstsec),A
+            LD HL,ccp
+rdSectors:
+
+            CALL cfWait
+
+            LD A,(hstsec)
+            OUT  (CF_LBA0),A
+            LD A,0
+            OUT  (CF_LBA1),A
+            OUT  (CF_LBA2),A
+            LD A,0E0H
+            OUT  (CF_LBA3),A
+            LD  A,1
+            OUT  (CF_SECCOUNT),A
+
+            PUSH  BC
+
+            CALL  cfWait
+
+            LD  A,CF_READ_SEC
+            OUT  (CF_COMMAND),A
+
+            CALL  cfWait
+
+            LD  C,4
+rd4secs512:
+            LD  B,128
+rdByte512:
+            in  A,(CF_DATA)
+            LD  (HL),A
+            iNC  HL
+            dec  B
+            JR  NZ, rdByte512
+            dec  C
+            JR  NZ,rd4secs512
+
+            POP  BC
+
+            LD A,(hstsec)
+            INC A
+            LD (hstsec),A
+
+            djnz rdSectors
+
+;================================================================================================
+; Common code for cold and warm boot
+;================================================================================================
+
+gocpm:
+            xor A               ;0 to accumulator
+            ld (hstact),A       ;host buffer inactive
+            ld (unacnt),A       ;clear unalloc count
+
+            LD HL,tpabuf        ; ADDress of BIOS DMA buffer.
+            LD (dmaAddr),HL
+            LD A,0C3h           ; Opcode for 'JP'.
+            LD (00h),A          ; Load at start of RAM.
+            LD HL,wboote        ; ADDress of jump for a warm boot.
+            LD (01h),HL
+            LD (05h),A          ; Opcode for 'JP'.
+            LD HL,bdos          ; ADDress of jump for the BDOS.
+            LD (06h),HL
+            LD A,(userdrv)      ; Save new drive number (0).
+            LD C,A              ; Pass drive number in C.
+
+            JP ccp              ; Start CP/M by jumping to the CCP.
+;================================================================================================
+; Console I/O routines
+;================================================================================================
+;------------------------------------------------------------------------------------------------
+CONST:
+            LD A,(iobyte)
+            AND 00001011B       ; Mask off console and high bit of reader
+            CP 00001010B        ; redirected to reader on UR1/2 (Serial A)
+            JR Z,constA
+            CP 00000010B        ; redirected to reader on TTY/RDR (Serial B)
+            JR Z,constB
+            AND 03             ; remove the reader from the mask - only console bits then remain
+            CP 01
+            JR NZ,constB
+constA:
+COND	1-ACIA
+            IN      A,(SIOA_C)
+ENDC
+COND	ACIA
+            IN      A,(ACIA_C)
+ENDC
+            RRA
+            LD      A,0FFH
+            RET     C
+            XOR     A
+            RET
+constB:
+COND	1-ACIA
+            IN      A,(SIOB_C)
+            RRA
+            LD      A,0FFH
+            RET     C
+ENDC
+            XOR     A
+            RET
+;------------------------------------------------------------------------------------------------
+READER:
+reader2:    LD A,(iobyte)
+            AND 08
+            CP 08
+            JR NZ,coninB
+            JR coninA
+;------------------------------------------------------------------------------------------------
+CONIN:
+            LD A,(iobyte)
+            AND 03
+            CP 02
+            JR Z,reader2        ; 'BAT:' redirect
+            CP 01
+            JR NZ,coninB
+coninA:
+COND	1-ACIA
+            IN      A,(SIOA_C)
+ENDC
+COND	ACIA
+            IN      A,(ACIA_C)
+ENDC
+            RRA
+            JR      nc,coninA
+COND	1-ACIA
+            IN      A,(SIOA_D)
+ENDC
+COND	ACIA
+            IN      A,(ACIA_D)
+ENDC
+            RET                 ; Char ready in A
+;
+coninB:
+COND	1-ACIA
+            IN      A,(SIOB_C)
+            RRA
+            JR      nc,coninB
+            IN      A,(SIOB_D)
+            RET                 ; Char ready in A
+ENDC
+COND	ACIA
+	    XOR     A
+	    RET
+ENDC
+;------------------------------------------------------------------------------------------------
+LIST:       PUSH AF             ; Store character
+list2:      LD A,(iobyte)
+            AND 0C0H
+            CP 40H
+            JR NZ,conoutB1
+            JR conoutA1
+
+;------------------------------------------------------------------------------------------------
+PUNCH:      PUSH AF             ; Store character
+            LD A,(iobyte)
+            AND 20H
+            CP 20H
+            JR NZ,conoutB1
+            JR conoutA1
+
+;------------------------------------------------------------------------------------------------
+CONOUT:     PUSH AF             ; Store character
+            LD A,(iobyte)
+            AND 03
+            CP 02
+            JR Z,list2          ; 'BAT:' redirect
+            CP 01
+            JR NZ,conoutB1
+conoutA1:
+COND	1-ACIA
+	    IN    A,(SIOA_C)    ; Status byte D2=TX Buff Empty, D0=RX char ready
+            BIT   2,A           ; Set Zero flag if still transmitting character
+ENDC
+COND	ACIA
+	    IN    A,(ACIA_C)
+            BIT   1,A
+ENDC
+            JR Z,conoutA1       ; Loop until SIO flag signals ready
+            LD A,C
+COND	1-ACIA
+            OUT (SIOA_D),A      ; OUTput the character
+ENDC
+COND	ACIA
+            OUT (ACIA_D),A      ; OUTput the character
+ENDC
+            POP AF              ; RETrieve character
+            RET
+conoutB1:
+COND	1-ACIA
+	    IN    A,(SIOB_C)    ; Status byte D2=TX Buff Empty, D0=RX char ready
+            BIT   2,A           ; Set Zero flag if still transmitting character
+            JR Z,conoutB1       ; Loop until SIO flag signals ready
+            LD A,C
+            OUT (SIOB_D),A      ; OUTput the character
+ENDC
+            POP AF              ; RETrieve character
+            RET
+;------------------------------------------------------------------------------------------------
+PRSTAT:     LD A,0FFH            ; Return list status of 0xFF (ready).
+            RET
+
+;================================================================================================
+; Disk processing entry points
+;================================================================================================
+
+SELDSK:
+            LD HL,0000
+            LD A,C
+; <JL> Added IFDEF/ELSE block to select 64/128 MB
+            CP 8                ; 8 for 64MB disk, 16 for 128MB disk
+            jr C,chgdsk         ; if invalid drive will give BDOS error
+            LD A,(userdrv)      ; so set the drive back to a:
+            CP C                ; If the default disk is not the same as the
+            RET NZ              ; selected drive then return,
+            XOR A               ; else reset default back to a:
+            LD (userdrv),A      ; otherwise will be stuck in a loop
+            LD (sekdsk),A
+            ret
+
+chgdsk:     LD  (sekdsk),A
+            RLC A               ;*2
+            RLC A               ;*4
+            RLC A               ;*8
+            RLC A               ;*16
+            LD  HL,dpbase
+            LD B,0
+            LD c,A
+            ADD HL,BC
+
+            RET
+
+;------------------------------------------------------------------------------------------------
+HOME:
+            ld a,(hstwrt)       ;check for pending write
+            or A
+            jr nz,homed
+            ld (hstact),A       ;clear host active flag
+homed:
+            LD  BC,0000h
+
+;------------------------------------------------------------------------------------------------
+SETTRK:     LD  (sektrk),BC     ; Set track passed from BDOS in register BC.
+            RET
+
+;------------------------------------------------------------------------------------------------
+SETSEC:     LD  (seksec),BC     ; Set sector passed from BDOS in register BC.
+            RET
+
+;------------------------------------------------------------------------------------------------
+SETDMA:     LD  (dmaAddr),BC    ; Set DMA ADDress given by registers BC.
+            RET
+
+;------------------------------------------------------------------------------------------------
+SECTRN:    PUSH  BC
+            POP  HL
+            RET
+
+;------------------------------------------------------------------------------------------------
+READ:
+            ;read the selected CP/M sector
+            xor A
+            ld (unacnt),A
+            ld A,1
+            ld (readop),A       ;read operation
+            ld (rsflag),A       ;must read data
+            ld A,wrual
+            ld (wrtype),A       ;treat as unalloc
+            jp rwoper           ;to perform the read
+
+
+;------------------------------------------------------------------------------------------------
+WRITE:
+            ;write the selected CP/M sector
+            xor A               ;0 to accumulator
+            ld (readop),A       ;not a read operation
+            ld A,C              ;write type in c
+            ld (wrtype),A
+            cp wrual            ;write unallocated?
+            jr nz,chkuna        ;check for unalloc
+;
+;                               write to unallocated, set parameters
+            ld A,blksiz/128     ;next unalloc recs
+            ld (unacnt),A
+            ld A,(sekdsk)       ;disk to seek
+            ld (unadsk),A       ;unadsk = sekdsk
+            ld HL,(sektrk)
+            ld (unatrk),HL      ;unatrk = sectrk
+            ld A,(seksec)
+            ld (unasec),A       ;unasec = seksec
+;
+chkuna:
+;                               check for write to unallocated sector
+            ld A,(unacnt)       ;any unalloc remain?
+            or A
+            jr z,alloc          ;skip if not
+;
+;                               more unallocated records remain
+            dec A               ;unacnt = unacnt-1
+            ld (unacnt),A
+            ld A,(sekdsk)       ;same disk?
+            ld HL,unadsk
+            cp (HL)             ;sekdsk = unadsk?
+            jp nz,alloc         ;skip if not
+;
+;                               disks are the same
+            ld HL,unatrk
+            call sektrkcmp      ;sektrk = unatrk?
+            jp nz,alloc         ;skip if not
+;
+;                               tracks are the same
+            ld A,(seksec)       ;same sector?
+            ld HL,unasec
+            cp (HL)             ;seksec = unasec?
+            jp nz,alloc         ;skip if not
+;
+;                               match, move to next sector for future ref
+            inc (HL)            ;unasec = unasec+1
+            ld A,(HL)           ;end of track?
+            cp cpmspt           ;count CP/M sectors
+            jr c,noovf          ;skip if no overflow
+;
+;                               overflow to next track
+            ld (HL),0           ;unasec = 0
+            ld HL,(unatrk)
+            inc HL
+            ld (unatrk),HL      ;unatrk = unatrk+1
+;
+noovf:
+            ;match found, mark as unnecessary read
+            xor a               ;0 to accumulator
+            ld (rsflag),a       ;rsflag = 0
+            jr rwoper           ;to perform the write
+;
+alloc:
+            ;not an unallocated record, requires pre-read
+            xor a               ;0 to accum
+            ld (unacnt),a       ;unacnt = 0
+            inc a               ;1 to accum
+            ld (rsflag),a       ;rsflag = 1
+
+;------------------------------------------------------------------------------------------------
+rwoper:
+            ;enter here to perform the read/write
+            xor a               ;zero to accum
+            ld (erflag),a       ;no errors (yet)
+            ld a,(seksec)       ;compute host sector
+            or a                ;carry = 0
+            rra                 ;shift right
+            or a                ;carry = 0
+            rra                 ;shift right
+            ld (sekhst),a       ;host sector to seek
+;
+;                               active host sector?
+            ld hl,hstact        ;host active flag
+            ld a,(hl)
+            ld (hl),1           ;always becomes 1
+            or a                ;was it already?
+            jr z,filhst         ;fill host if not
+;
+;                               host buffer active, same as seek buffer?
+            ld a,(sekdsk)
+            ld hl,hstdsk        ;same disk?
+            cp (hl)             ;sekdsk = hstdsk?
+            jr nz,nomatch
+;
+;                               same disk, same track?
+            ld hl,hsttrk
+            call sektrkcmp      ;sektrk = hsttrk?
+            jr nz,nomatch
+;
+;                               same disk, same track, same buffer?
+            ld a,(sekhst)
+            ld hl,hstsec        ;sekhst = hstsec?
+            cp (hl)
+            jr z,match          ;skip if match
+;
+nomatch:
+            ;proper disk, but not correct sector
+            ld a,(hstwrt)       ;host written?
+            or a
+            call nz,writehst    ;clear host buff
+;
+filhst:
+            ;may have to fill the host buffer
+            ld a,(sekdsk)
+            ld (hstdsk),a
+            ld hl,(sektrk)
+            ld (hsttrk),hl
+            ld a,(sekhst)
+            ld (hstsec),a
+            ld a,(rsflag)       ;need to read?
+            or a
+            call nz,readhst     ;yes, if 1
+            xor a               ;0 to accum
+            ld (hstwrt),a       ;no pending write
+;
+match:
+            ;copy data to or from buffer
+            ld a,(seksec)       ;mask buffer number
+            and secmsk          ;least signif bits
+            ld l,a              ;ready to shift
+            ld h,0              ;double count
+            add hl,hl
+            add hl,hl
+            add hl,hl
+            add hl,hl
+            add hl,hl
+            add hl,hl
+            add hl,hl
+;                               hl has relative host buffer address
+            ld de,hstbuf
+            add hl,de           ;hl = host address
+            ex de,hl            ;now in DE
+            ld hl,(dmaAddr)     ;get/put CP/M data
+            ld c,128            ;length of move
+            ld a,(readop)       ;which way?
+            or a
+            jr nz,rwmove        ;skip if read
+;
+;           write operation, mark and switch direction
+            ld a,1
+            ld (hstwrt),a       ;hstwrt = 1
+            ex de,hl            ;source/dest swap
+;
+rwmove:
+            ;C initially 128, DE is source, HL is dest
+            ld a,(de)           ;source character
+            inc de
+            ld (hl),a           ;to dest
+            inc hl
+            dec c               ;loop 128 times
+            jr nz,rwmove
+;
+;                               data has been moved to/from host buffer
+            ld a,(wrtype)       ;write type
+            cp wrdir            ;to directory?
+            ld a,(erflag)       ;in case of errors
+            ret nz              ;no further processing
+;
+;                               clear host buffer for directory write
+            or a                ;errors?
+            ret nz              ;skip if so
+            xor a               ;0 to accum
+            ld (hstwrt),a       ;buffer written
+            call writehst
+            ld a,(erflag)
+            ret
+
+;------------------------------------------------------------------------------------------------
+;Utility subroutine for 16-bit compare
+sektrkcmp:
+            ;HL = .unatrk or .hsttrk, compare with sektrk
+            ex de,hl
+            ld hl,sektrk
+            ld a,(de)           ;low byte compare
+            cp (HL)             ;same?
+            ret nz              ;return if not
+;                               low bytes equal, test high 1s
+            inc de
+            inc hl
+            ld a,(de)
+            cp (hl)             ;sets flags
+            ret
+
+;================================================================================================
+; Convert track/head/sector into LBA for physical access to the disk
+;================================================================================================
+setLBAaddr:
+            LD HL,(hsttrk)
+            RLC L
+            RLC L
+            RLC L
+            RLC L
+            RLC L
+            LD A,L
+            AND 0E0H
+            LD L,A
+            LD A,(hstsec)
+            ADD A,L
+            LD (lba0),A
+
+            LD HL,(hsttrk)
+            RRC L
+            RRC L
+            RRC L
+            LD A,L
+            AND 01FH
+            LD L,A
+            RLC H
+            RLC H
+            RLC H
+            RLC H
+            RLC H
+            LD A,H
+            AND 020H
+            LD H,A
+            LD A,(hstdsk)
+            RLC a
+            RLC a
+            RLC a
+            RLC a
+            RLC a
+            RLC a
+            AND 0C0H
+            ADD A,H
+            ADD A,L
+            LD (lba1),A
+
+
+            LD A,(hstdsk)
+            RRC A
+            RRC A
+            AND 03H
+            LD (lba2),A
+
+; LBA Mode using drive 0 = E0
+            LD a,0E0H
+            LD (lba3),A
+
+
+            LD A,(lba0)
+            OUT  (CF_LBA0),A
+
+            LD A,(lba1)
+            OUT  (CF_LBA1),A
+
+            LD A,(lba2)
+            OUT  (CF_LBA2),A
+
+            LD A,(lba3)
+            OUT  (CF_LBA3),A
+
+            LD  A,1
+            OUT  (CF_SECCOUNT),A
+
+            RET
+
+;================================================================================================
+; Read physical sector from host
+;================================================================================================
+
+readhst:
+            PUSH  AF
+            PUSH  BC
+            PUSH  HL
+
+            CALL  cfWait
+
+            CALL  setLBAaddr
+
+            LD  A,CF_READ_SEC
+            OUT  (CF_COMMAND),A
+
+            CALL  cfWait
+
+            LD  c,4
+            LD  HL,hstbuf
+rd4secs:
+            LD  b,128
+rdByte:
+            in  A,(CF_DATA)
+            LD  (HL),A
+            iNC  HL
+            dec  b
+            JR  NZ, rdByte
+            dec  c
+            JR  NZ,rd4secs
+
+            POP  HL
+            POP  BC
+            POP  AF
+
+            XOR  a
+            ld (erflag),a
+            RET
+
+;================================================================================================
+; Write physical sector to host
+;================================================================================================
+
+writehst:
+            PUSH  AF
+            PUSH  BC
+            PUSH  HL
+
+
+            CALL  cfWait
+
+            CALL  setLBAaddr
+
+            LD  A,CF_WRITE_SEC
+            OUT  (CF_COMMAND),A
+
+            CALL  cfWait
+
+            LD  c,4
+            LD  HL,hstbuf
+wr4secs:
+            LD  b,128
+wrByte:     LD  A,(HL)
+            OUT  (CF_DATA),A
+            iNC  HL
+            dec  b
+            JR  NZ, wrByte
+
+            dec  c
+            JR  NZ,wr4secs
+
+            POP  HL
+            POP  BC
+            POP  AF
+
+            XOR  a
+            ld (erflag),a
+            RET
+
+;================================================================================================
+; Wait for disk to be ready (busy=0,ready=1)
+;================================================================================================
+cfWait:     PUSH AF
+TstBusy:   IN   A,(CF_STATUS)  ;Read status register
+            BIT  7,A            ;Test Busy flag
+            JR   NZ,TstBusy    ;High so busy
+TstReady:  IN   A,(CF_STATUS)  ;Read status register
+            BIT  6,A            ;Test Ready flag
+            JR   Z,TstBusy     ;Low so not ready
+            POP  AF
+            RET
+
+;================================================================================================
+; Utilities
+;================================================================================================
+
+printInline:
+            EX  (SP),HL         ; PUSH HL and put RET ADDress into HL
+            PUSH  AF
+            PUSH  BC
+nextILChar: LD  A,(HL)
+            CP 0
+            JR Z,endOfPrint
+            LD   C,A
+            CALL  CONOUT        ; Print to TTY
+            INC  HL
+            JR nextILChar
+endOfPrint: INC  HL             ; Get past 'null' terminator
+            POP  BC
+            POP  AF
+            EX  (SP),HL         ; PUSH new RET ADDress on stack and restore HL
+            RET
+
+;================================================================================================
+; Data storage
+;================================================================================================
+
+dirbf:     DEFS 128             ;scratch directory area
+alv00:      DEFS 257             ;allocation vector 0
+alv01:      DEFS 257             ;allocation vector 1
+alv02:      DEFS 257             ;allocation vector 2
+alv03:      DEFS 257             ;allocation vector 3
+alv04:      DEFS 257             ;allocation vector 4
+alv05:      DEFS 257             ;allocation vector 5
+alv06:      DEFS 257             ;allocation vector 6
+alv07:      DEFS 257             ;allocation vector 7
+
+lba0:        DEFB 00h
+lba1:        DEFB 00h
+lba2:        DEFB 00h
+lba3:        DEFB 00h
+
+            DEFS 020h            ; Start of BIOS stack area.
+biosstack:
+
+sekdsk:     DEFS 1               ;seek disk number
+sektrk:     DEFS 2               ;seek track number
+seksec:     DEFS 2               ;seek sector number
+;
+hstdsk:     DEFS 1               ;host disk number
+hsttrk:     DEFS 2               ;host track number
+hstsec:     DEFS 1               ;host sector number
+;
+sekhst:     DEFS 1               ;seek shr secshf
+hstact:     DEFS 1               ;host active flag
+hstwrt:     DEFS 1               ;host written flag
+;
+unacnt:     DEFS 1               ;unalloc rec cnt
+unadsk:     DEFS 1               ;last unalloc disk
+unatrk:     DEFS 2               ;last unalloc track
+unasec:     DEFS 1               ;last unalloc sector
+;
+erflag:     DEFS 1               ;error reporting
+rsflag:     DEFS 1               ;read sector flag
+readop:     DEFS 1               ;1 if read operation
+wrtype:     DEFS 1               ;write operation type
+dmaAddr:    DEFS 2               ;last dma address
+hstbuf:     DEFS 512             ;host buffer
+
+;biosEnd --------------------------------------------------------------------
+
+; Disable the ROM, pop the active IO port from the stack (supplied by monitor),
+; then start CP/M
+popAndRun:
+            LD A,01
+            OUT (38H),A
+
+            POP AF	       ;A : 0 = port A, 1 = port B
+            CP 01
+            JR Z,consoleAtB
+            LD A,01            ;(List is TTY:, Punch is TTY:, Reader is TTY:, Console is CRT:)
+            JR setIOByte
+consoleAtB: LD A,00            ;(List is TTY:, Punch is TTY:, Reader is TTY:, Console is TTY:)
+setIOByte:  LD (iobyte),A
+
+            JP bios
+
+;=================================================================================
+; Normal start CP/M vector
+;=================================================================================
+
+	psect	top
+
+;           ORG 0FFFEH
+
+            DEFW popAndRun
+

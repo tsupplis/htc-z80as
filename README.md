@@ -11,7 +11,9 @@ The original source was Copyright (C) 1977, Lehman Consulting Services and was p
 
 It was further modified by Ray Halls in 1982 and Neil Harrison in 1983. 
 
-Last known version was 2.8. It was further modified by Hector Peraza, starting from 2017. 
+Last known Z80ASM version was 2.8. 
+
+It was further modified by Hector Peraza, starting from 2017. 
 
 Z80AS is actually an adaptation of the ZSM4 macro-assembler v4.6 published by Hector Peraza on GitHub ( https://github.com/hperaza/ZSM4 ), made by Ladislau Szilagyi in December 2021 – January 2022.
 
@@ -24,15 +26,31 @@ The main target of the adaptation was to obtain an assembler compatible with ZAS
 
 The biggest ZAS problem is related to its size (38KB), and because of this ZAS is unable to assemble large source files (too small free space remains for the symbols). 
 
-Z80AS’s size is only 24KB, that means 14KB more memory is available to store the symbols, compared to ZAS.
+Z80AS’s size is only 22KB, that means 16KB more memory is available to store the symbols, compared to ZAS.
 
-For example, ZAS fails to assemble the CP/M BDOS source. In contrast, Z80AS succeeds to assemble even a larger file, the CP/M BDOS and BIOS, concatenated.
+For example, ZAS fails to assemble the CP/M BDOS source. In contrast, Z80AS succeeds to assemble even a larger file, the CP/M BDOS and BIOS, concatenated (see the file: tests/bdosbios.as).
 
 Often, using HiTech’s C compiler to compile large C files is not possible because ZAS fails to assemble the intermediate file produced by the compiler (“out of memory” error message).
 
 Z80AS is compatible with HiTech’s ZAS and produces object files compatible with HiTech’s LINK linker. 
 
-Therefore, by using the -S option (to output the corresponding assembly file) when compiling a C source file, we can assemble the output with Z80AS, avoiding the “out of memory” error, then we can link the object file with the C library files to obtain the final .COM file.
+Therefore, it can substitute ZAS, without disturbing the use of HiTech's C compiler.
+
+Try this:
+
+PIP OLDZAS.COM=ZAS.COM (save a copy of ZAS.COM, just in case)
+  
+PIP ZAS.COM=Z80AS.COM
+
+Then, try to compile or build an executable file using the HiTech's C command:
+
+C -V -C anyfile.c (just compile anyfile.c)
+
+or
+
+C -V anyfile.c (build anyfile.COM)
+
+Z80AS will be executed, instead of ZAS, building the requested object code.
 
 Compared to HiTech's ZAS assembler, Z80AS has some advantages:
 
@@ -50,7 +68,9 @@ Z80AS.COM was obtained by assembling the Z80AS source files using Z80AS (self as
 
 However, if you decide to use ZAS to assemble the source files, it will work too.
 
-The folder SOURCES contains the Z80AS source files.
+The folder SOURCES contains the Z80AS source files to be compiled with either ZAS or Z80AS.
+
+The folder SOURCES-Z80AS contains the Z80AS source files to be compiled ONLY with Z80AS.
 
 The folder TESTS contains various tests of the Z80AS features.
 
