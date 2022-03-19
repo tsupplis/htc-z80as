@@ -1583,19 +1583,19 @@ RELERR:	ld	a,'R'
 
 	psect	data
 
-INTBUF:	defs	2		; returned value from INT routine
-REGVAL:	defs	2		; register value from (rp+dd) expression
-BASE:	defs	2		; base of number in INT convert loop
-VOID:	defs	1
-SYMPT:	defs	2
-OPMODE:	defs	1		; mode of last operand
-;OPCOMN:	defs	2		; address of COMMON block of last operand
-UNARY:	defs	1		; unary +/- flag
+INTBUF:	defw	0		; returned value from INT routine
+REGVAL:	defw	0		; register value from (rp+dd) expression
+BASE:	defw	0		; base of number in INT convert loop
+VOID:	defb	0
+SYMPT:	defw	0
+OPMODE:	defb	0		; mode of last operand
+;OPCOMN:	defw	0		; address of COMMON block of last operand
+UNARY:	defb	0		; unary +/- flag
 
-OPSTK:	defs	1		; operator stack index
+OPSTK:	defb	0		; operator stack index
 	defs	OSTKSZ*3	; stack space
 
-VALSTK:	defs	1		; operand stack index
+VALSTK:	defb	0		; operand stack index
 	defs	OSTKSZ*3	; stack space
 
 ;	END

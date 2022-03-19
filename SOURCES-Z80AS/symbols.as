@@ -690,7 +690,7 @@ AdjustSymbol:
 ;
 	psect	data
 ;
-TempCnt:defs	2	;counter
+TempCnt:defw	0	;counter
 TempSym:defs	300H
 ;
 ;	value (word)

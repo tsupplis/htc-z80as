@@ -971,11 +971,11 @@ SORT7:	pop	hl
 
 	psect	data
 
-MAXLNE:	defs	1	; lines per page
-LSTCNT:	defs	1	; object code field character count
-PCLINE:	defs	2	; PC for current listing line
-SYMREF:	defs	2	; symbol ref address
-SWPFLG:	defs	1	; flag to indicate a swap in the sort
-SYMCNT:	defs	1	; symbols-per-line counter
+MAXLNE:	defb	0	; lines per page
+LSTCNT:	defb	0	; object code field character count
+PCLINE:	defw	0	; PC for current listing line
+SYMREF:	defw	0	; symbol ref address
+SWPFLG:	defb	0	; flag to indicate a swap in the sort
+SYMCNT:	defb	0	; symbols-per-line counter
 
 ;	END

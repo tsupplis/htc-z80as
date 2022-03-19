@@ -705,5 +705,5 @@ altof:
 	psect	data
 
 fperr:
-	defs	1		;floating over/underflow flag
+	defb	0		;floating over/underflow flag
 ;

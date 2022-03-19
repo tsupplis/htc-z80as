@@ -21,13 +21,15 @@
 ;                                                                      ;
 ;**********************************************************************;
 
+	TITLE	Z80AS Macro-Assembler
+
 *include	ZSM.INC
 
 ;public
 	global	UCASE,GNB,WNB,WNB2,CLINE,WLINE,REWIND,INCMEM
 	global	CLSINP,CLOSE1,CLOSE2,OPNLIB,CLSLIB,INCLVL
 ;extern
-	global	Z80ASM,HOFNAM,LFLAG,OFLAG,QFLAG,JFLAG
+	global	Z80ASM,HOFNAM,LFLAG,OFLAG,QFLAG,JFLAG,XFLAG,DFLAG
 	global	ERRFLG,CMPHD,MAXMEM,SYMTBL,VALID,MALLOC,MFREE
 	global	FNDREC,CNV2HX,DEFCPU,RADIX,UMODE
 	global	CMNPTR
@@ -49,7 +51,7 @@ LBUFSZ	equ	512		; listing buffer size
 
 	psect	text
 
-;	SUBTTL	Initializations and command loop
+	SUBTTL	Initializations and command loop
 ;
 ;	System-dependent initializations
 ;
@@ -120,6 +122,20 @@ option:
 	inc	hl
 	jr	next
 5:
+	cp	'X'
+	jr	nz,6f
+	ld	a,0FFH
+	ld	(XFLAG),a	;set "only global/extern symbols" flag
+	inc	hl
+	jr	next
+6:
+	cp	'D'
+	jr	nz,7f
+	ld	a,0FFH
+	ld	(DFLAG),a	;set "DSEG init" flag
+	inc	hl
+	jr	next
+7:
 	scf			;wrong option
 	ret
 ;
@@ -167,8 +183,8 @@ PROCESS:
 	ld	(OFLAG),a	; output obj file name equal to source file name
 	ld	a,1
 	ld	(UMODE),a	; Undefined symbols default to External
-	xor	a
-	ld	(DEFCPU),a	; CPU is Z80
+;	xor	a
+;	ld	(DEFCPU),a	; CPU is Z80
 	ld	hl,10
 	ld	(RADIX),hl	; default radix = 10 (for /D option)
 
@@ -385,7 +401,7 @@ TEST3:	inc	hl
 	pop	de
 	jr	TEST1
 
-;	SUBTTL	Console, Printer and File I/O
+	SUBTTL	Console, Printer and File I/O
 
 ;	ENTRY - Used to call BDOS - Saves and restores registers
 
@@ -965,9 +981,6 @@ INCMEM:	scf
 
 	psect	data
 
-ENDMSG:	defm	'Finished.'
-	defb	0
-
 SM1:	defm	'Source file not found'
 	defb	0
 SM2:	defm	'Unable to create object file'
@@ -1004,7 +1017,7 @@ VSNMSG:	defm	'Z80AS Macro-Assembler V'
 	defb	VER2
 	defb	0
 
-ARGSMSG:defm	'Usage: Z80AS [-L[listfile]] [-Oobjfile] [-J] sourcefile'
+ARGSMSG:defm	'Usage: Z80AS [-L[listfile]] [-Oobjfile] [-J] [-Q] [-X] [-D] sourcefile[.as]'
 	defb	0
 
 ; I/O block offset definitions
@@ -1015,22 +1028,22 @@ FCBADR	equ	BUFSZ+2		; file control block address (2 bytes)
 BUFADR	equ	FCBADR+2	; buffer address (2 bytes)
 IOBSZ	equ	BUFADR+2	; I/O block size
 
-IOB2:	defs	2		; buffer char counter
+IOB2:	defw	0		; buffer char counter
 	defw	OBUFSZ		; buffer size
 	defw	FCB2		; FCB address (REL)
 	defw	BUF2		; buffer address
 
-IOB3:	defs	2		; buffer char counter
+IOB3:	defw	0		; buffer char counter
 	defw	OBUFSZ		; buffer size
 	defw	FCB3		; FCB address (PRN)
 	defw	BUF3		; buffer address
 
-IFLAG:	defs	1		; input device code
+IFLAG:	defb	0		; input device code
 FCB1:	defs	36		; file control block (source)
 INBUF:	defs	IBUFSZ		; .MAC input buffer
-IBCNT:	defs	2		; index of next char in input buffer
-IBLEN:	defs	2		; number of valid bytes in input buffer
-IRECNO:	defs	2		; starting record number of input buffer
+IBCNT:	defw	0		; index of next char in input buffer
+IBLEN:	defw	0		; number of valid bytes in input buffer
+IRECNO:	defw	0		; starting record number of input buffer
 
 FCB2:	defs	36		; file control block (REL)
 BUF2:	defs	OBUFSZ		; .REL output buffer
@@ -1038,9 +1051,12 @@ BUF2:	defs	OBUFSZ		; .REL output buffer
 FCB3:	defs	36		; file control block (PRN)
 BUF3:	defs	OBUFSZ		; .PRN output buffer
 
-INCLVL:	defs	1		; nested INCLUDE level
+INCLVL:	defb	0		; nested INCLUDE level
 
-EFLAG:	defs	1		; I/O error output flag
+EFLAG:	defb	0		; I/O error output flag
+
+ENDMSG:	defm	'Finished.'
+	defb	0
 
 	defs	128
 STACK	equ	$		; Z80 stack

@@ -1457,17 +1457,17 @@ DC8:	call	ERRQ		; missing closing '>'
 	psect	data
 
 MDFLVL:	defb	0	; nested MACRO definition counter
-MACTYP:	defs	1	; type of macro being defined
+MACTYP:	defb	0	; type of macro being defined
 MACLVL:	defb	0	; macro execution level
-MACBGN:	defs	2	; begin of macro body
-MACPTR:	defs	2	; macro build ptr
-PARAMS:	defs	2	; pointer to dummy parameters during MACRO build
-ARGS:	defs	2	; pointer to argument list during MACRO expansion
-LCLFLG:	defs	1	; LOCAL variable flag
-LCLNUM:	defs	2	; LOCAL label number for next MACRO expansion
-LBASE:	defs	2	; LOCAL label base number for executing MACRO
-LCOUNT:	defs	1	; number of LOCAL variables in a MACRO
-RCOUNT:	defs	1	; REC char count during MACRO expansion
+MACBGN:	defw	0	; begin of macro body
+MACPTR:	defw	0	; macro build ptr
+PARAMS:	defw	0	; pointer to dummy parameters during MACRO build
+ARGS:	defw	0	; pointer to argument list during MACRO expansion
+LCLFLG:	defb	0	; LOCAL variable flag
+LCLNUM:	defw	0	; LOCAL label number for next MACRO expansion
+LBASE:	defw	0	; LOCAL label base number for executing MACRO
+LCOUNT:	defb	0	; number of LOCAL variables in a MACRO
+RCOUNT:	defb	0	; REC char count during MACRO expansion
 NUMBUF:	defs	17	; buffer for numeric conv. (max size = binary base)
 
 ;	end

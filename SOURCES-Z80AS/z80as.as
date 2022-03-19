@@ -214,7 +214,7 @@
 
 *include        ZSM.INC
 
-	global	Z80ASM,HOFNAM,LFLAG,OFLAG,QFLAG,DBWFLG,VAL
+	global	Z80ASM,HOFNAM,LFLAG,OFLAG,QFLAG,DBWFLG,VAL,XFLAG,DFLAG
 	global	IDBUF,ERRFLG,BACKUP,EVFLGS,GNC,CPU,ADDEXT
 	global	PC,PCFLAG,PTR1,UFLAG,SYMTBL,CURSEG,CONDSP
 	global	REC,LEN,IDLEN,OERROR,SYMADR,EVMODE
@@ -335,13 +335,13 @@ S401:   ld      a,(PASSNO)
 	and     SEGMASK
         ld      e,a
         call    WLOC            ; else update current loc
-        jr      S402
-S403:   xor     a
-        call    WOBJ            ; write zero bytes to initialize block
-        dec     hl
-        ld      a,h
-        or      l
-        jr      nz,S403
+;        jr      S402
+;S403:   xor     a
+;        call    WOBJ            ; write zero bytes to initialize block
+;        dec     hl
+;        ld      a,h
+;        or      l
+;        jr      nz,S403
 S402:   ld      a,(EFLG)
         or      a
         jp      z,NEXT          ; go process next record
@@ -423,7 +423,15 @@ S420:   ld      a,(de)          ; get length
         inc     hl              ;HL=pointer of next symbol(or EOL)
         ex      (sp),hl         ;HL=name pointer, pointer of next symbol(or EOL) on stack
                                 ;DE=val, B=name length, C=seg&mode
+	ld	a,(XFLAG)
+	or	a		;if only global/extern symbols must be stored in obj file
+	jr	z,S420S
+	ld	a,c		;then verify mode
+	and	EXTSYM + GBLSYM
+	jr	z,S420NS	;and skip writing symbol if symbol is not global or extern
+S420S:
         call    WDFENT          ;write symbol to OBJ
+S420NS:
         pop     de              ;DE=pointer of next symbol(or EOL)
         jr      S420
 
@@ -6842,6 +6850,9 @@ OPCOD3: defb    3
         defb    3
         defm    'SLA'
         defb    20h,0,2
+        defb    3
+        defm    'SLL'
+        defb    20h,0,2
 ;        defb    3+Z180
 ;        defm    'SLP'
 ;        defb    0EDh,76h,1
@@ -7084,6 +7095,9 @@ OPCOD5:
         defb    5
         defm    '$XALL'
         defb    11,10,27
+        defb    5
+        defm    '*LIST'
+        defb    11,0,27
 ;        defb    5
 ;        defm    '.Z180'
 ;        defb    19,1,27
@@ -7187,6 +7201,12 @@ OPCOD6:
         defb    6
         defm    '$XLIST'
         defb    11,2,27
+        defb    6
+        defm    '*EJECT'
+        defb    7,0,27
+        defb    6
+        defm    '*TITLE'
+        defb    12,0,27
 ;        defb    6
 ;        defm    'COMMON'
 ;        defb    16,0,27
@@ -7237,6 +7257,9 @@ NUMOP7  equ     tmp7/11 ;(7+4)
 
 OPCOD8: 
         defb    8
+        defm    '*HEADING'
+        defb    12,1,27
+        defb    8
         defm    '*INCLUDE'
         defb    23,0,27
 ;	 defb    8
@@ -7276,7 +7299,7 @@ REC:    defs    RECMAX  ; input line, must follow HDRBUF
 TITLEB: defs    81      ; title buffer (80 chars + trailing null)
 SBTTLB: defs    61      ; subtitle buffer (60 chars + trailing null)
 
-IDLEN:  defs    1       ; length of identifier
+IDLEN:  defb    0       ; length of identifier
 IDBUF:  defs    IDMAX   ; current identifier
 
 ;NAMLEN: defb    6       ; max REL symbol length (5..8)
@@ -7286,55 +7309,57 @@ IDBUF:  defs    IDMAX   ; current identifier
 ;MODIDN: defb    0       ; length
 ;        defs    8       ; module ID
 
-CPU:    defs    1       ; target CPU type: 0=Z80, 1=Z180, 2=Z280
-DEFCPU: defs    1       ; default CPU type from command line
-PC:     defs    2       ; current program counter
-ASEGPC: defs    2       ; current absolute segment counter
-CSEGPC: defs    2       ; current code segment counter
-DSEGPC: defs    2       ; current data segment counter
-BSEGPC: defs    2       ; current bss segment counter
-CUST1SEGPC:defs	2	; current custom1 segment counter
-CUST2SEGPC:defs	2	; current custom2 segment counter
-CUST3SEGPC:defs	2	; current custom3 segment counter
-LEN:    defs    1       ; length of current instruction
-LENDS:  defs    2       ; for DEFS
-CURSEG: defs    1       ; current segment: 40h=TEXT, 80h=DATA, C0h=BSS
+CPU:    defb    0       ; target CPU type: 0=Z80, 1=Z180, 2=Z280
+DEFCPU: defb    0       ; default CPU type from command line
+PC:     defw    0       ; current program counter
+ASEGPC: defw    0       ; current absolute segment counter
+CSEGPC: defw    0       ; current code segment counter
+DSEGPC: defw    0       ; current data segment counter
+BSEGPC: defw    0       ; current bss segment counter
+CUST1SEGPC:defw	0	; current custom1 segment counter
+CUST2SEGPC:defw	0	; current custom2 segment counter
+CUST3SEGPC:defw	0	; current custom3 segment counter
+LEN:    defb    0       ; length of current instruction
+LENDS:  defw    0       ; for DEFS
+CURSEG: defb    0       ; current segment: 40h=TEXT, 80h=DATA, C0h=BSS
 			;	2=custom1, 4=custom2, 8=custom3
 BSSIZE: defw    0       ; BSS segment size
-PTR1:   defs    2       ; points to next char in REC
-CURLNE: defs    1       ; current line number for paging output
-EQUFLG: defs    1       ; if non-zero VAL is used instead of PC for print
-LBLFLG: defs    1       ; if non-zero, force PC output to listing
-DSFLAG: defs    1       ; if non-zero LENDS is used for print
-DBWFLG: defs    1       ; DB/DC/DW flag
-LOCFLG: defs    1       ; if non-zero, loc counter is pending output
-NEWSYM: defs    1       ; new symbol flag
-ENDADR: defs    2       ; expression value on END statement
-ENDMOD: defs    1       ; expression result mode on END statement
+PTR1:   defw    0       ; points to next char in REC
+CURLNE: defb    0       ; current line number for paging output
+EQUFLG: defb    0       ; if non-zero VAL is used instead of PC for print
+LBLFLG: defb    0       ; if non-zero, force PC output to listing
+DSFLAG: defb    0       ; if non-zero LENDS is used for print
+DBWFLG: defb    0       ; DB/DC/DW flag
+LOCFLG: defb    0       ; if non-zero, loc counter is pending output
+NEWSYM: defb    0       ; new symbol flag
+ENDADR: defw    0       ; expression value on END statement
+ENDMOD: defb    0       ; expression result mode on END statement
 ENDMARK:defb	0	; 0 if no END start
-EFLG:   defs    1       ; end of program flag (to allow printing of END stmt)
-OPCODE: defs    2       ; current opcode from symbol table
-RADIX:  defs    2       ; default radix for numeric conversion
-COMNTC: defs    1       ; .COMMENT delimiter char
+EFLG:   defb    0       ; end of program flag (to allow printing of END stmt)
+OPCODE: defw    0       ; current opcode from symbol table
+RADIX:  defw    0       ; default radix for numeric conversion
+COMNTC: defb    0       ; .COMMENT delimiter char
 
-VAL:    defs    2       ; return from EVAL routine      !   do   !
-EVMODE: defs    1       ; expression result mode        !  not   !
-EXTCHN: defs    2       ; External chain address        ! change !
-CMNPTR: defs    2       ; pointer to COMMON segment     ! order  !
+VAL:    defw    0       ; return from EVAL routine      !   do   !
+EVMODE: defb    0       ; expression result mode        !  not   !
+EXTCHN: defw    0       ; External chain address        ! change !
+CMNPTR: defw    0       ; pointer to COMMON segment     ! order  !
 
-SAVVAL: defs    2       ; saved contents of VAL         !   do   !
-SAVMOD: defs    1       ; saved contents of EVMODE      !  not   !
-SAVCHN: defs    2       ; saved contents of EXTCHN      ! change !
-SAVCMN: defs    2       ; saved contents of CMNPTR      ! order  !
+SAVVAL: defw    0       ; saved contents of VAL         !   do   !
+SAVMOD: defb    0       ; saved contents of EVMODE      !  not   !
+SAVCHN: defw    0       ; saved contents of EXTCHN      ! change !
+SAVCMN: defw    0       ; saved contents of CMNPTR      ! order  !
 
-LPFLAG: defs    1       ; listing line pending flag
-LSTCNT: defs    1       ; character count of object code field in listing
-LFLAG:  defs    1       ; listing flag:'A-D' = PRN file destn drive
+LPFLAG: defb    0       ; listing line pending flag
+LSTCNT: defb    0       ; character count of object code field in listing
+LFLAG:  defb    0       ; listing flag:'A-D' = PRN file destn drive
                         ; 'Z' = no listing; 'X' = listing to screen
                         ; 'Y' = listing to screen, errors echoed to printer
                         ; 'P' = listing to printer
-OFLAG:  defs    1       ; object flag: 'Z' = no obj, 'A-D' = REL file destn drive
+OFLAG:  defb    0       ; object flag: 'Z' = no obj, 'A-D' = REL file destn drive
 QFLAG:  defb    0       ; quiet flag
+XFLAG:	defb	0	; global/external symbols flag
+DFLAG:	defb	0	; DEFS init flag
 
 ;order of next 4 bytes is mandatory!
 JOPTDIS:defb	0FFH	; 0 = jump optimization disabled
@@ -7343,31 +7368,31 @@ JPASS:	defb	0	; extra pass marker (0FFH = ON)
 PASSNO: defb    0       ; current pass: 0=pass 1, FF=pass 2
 ;
 JCOUNT:	defw	0	; jump optimization counter
-UMODE:  defs    1       ; if set, treat all undefined symbols as externals
-ERRFLG: defs    1       ; error character for this line
-ERRCNT: defs    2       ; error count
-MACFLG: defs    1       ; MACRO expansion flag for listing
-SYMPTR: defs    2       ; address of next symbol table entry
-MAXMEM: defs    2       ; maximum usable memory address
+UMODE:  defb    0       ; if set, treat all undefined symbols as externals
+ERRFLG: defb    0       ; error character for this line
+ERRCNT: defw    0       ; error count
+MACFLG: defb    0       ; MACRO expansion flag for listing
+SYMPTR: defw    0       ; address of next symbol table entry
+MAXMEM: defw    0       ; maximum usable memory address
 DSPTR:  defw    0       ; pointer to start of dynamic storage
-PCFLAG: defs    1       ; PC relative value in EVAL
-UFLAG:  defs    1       ; undefined flag from EVAL, 0 = all ok, 1 or >1 = undefined
-EVFLGS: defs    1       ; flag field from last SYMLUK
-LSTOPT: defs    1       ; list options
-IFLIST: defs    1       ; set true to suppress listing on IF, ELSE, ENDIF
+PCFLAG: defb    0       ; PC relative value in EVAL
+UFLAG:  defb    0       ; undefined flag from EVAL, 0 = all ok, 1 or >1 = undefined
+EVFLGS: defb    0       ; flag field from last SYMLUK
+LSTOPT: defb    0       ; list options
+IFLIST: defb    0       ; set true to suppress listing on IF, ELSE, ENDIF
                         ;  when "LIST NOCOND" is current.
-NOLIST: defs    1       ; set to true to avoid listing TITLE, FORM, PAGE, EJECT
+NOLIST: defb    0       ; set to true to avoid listing TITLE, FORM, PAGE, EJECT
 
 CONDSP: defw    CNDSTK  ; conditionals stack pointer
         defs    CSTKSZ  ; conditionals stack
 CNDSTK: defb    0FFh    ; we always start true
 CLEVEL: defb    0       ; conditionals stack level
 
-SYMMOD: defs    1       ; symbol address mode
-SYMADR: defs    2       ; address of data field for last SYMENT
-IDADR:  defs    2       ; address of ID field for last SYMENT
+SYMMOD: defb    0       ; symbol address mode
+SYMADR: defw    0       ; address of data field for last SYMENT
+IDADR:  defw    0       ; address of ID field for last SYMENT
 
-SYMTBL: defs    2       ; address of first available sym table slot
+SYMTBL: defw    0       ; address of first available sym table slot
 
 
 

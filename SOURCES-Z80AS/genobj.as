@@ -18,9 +18,10 @@
 	global	LASTEXTSYM
 	global	ENDADR,ENDMOD,ENDMARK
 	global	C1N,C2N,C3N
+	global  DFLAG
 ;
-NOOBJ	equ	0
-DEBUG	equ	0
+NOOBJ		equ	0
+DEBUG		equ	0
 ;----------------------------------------------------------------------------
 IF	DEBUG
 ;
@@ -287,6 +288,10 @@ IF	DEBUG
 	pop	hl
 	ret
 ELSE
+	ld	a,(DFLAG)	;if "DEFS init" flag set...
+	or	a
+	jr	z,skip
+				;...initialize DSEG areas with zero
 	ld	a,(CRTGRP)	;check DEFS
 	cp	e
 	jr	nz,skip
@@ -1135,7 +1140,7 @@ ID_REC_LEN	equ	$-ID_REC
 START_REC:
 	defw	9		;4+4+1
 	defb	R_START
-start:	defs	2
+start:	defw	0
 	defw	0
 pstart:	defm	'text'
 	defb	0
@@ -1165,7 +1170,7 @@ BSS_REC_LEN	equ	$-BSS_REC
 BSS_S_REC:
 	defw	8		;len
 	defb	R_TEXT		;TEXT
-BSZ:	defs	2		;STORE HERE BSSIZE !
+BSZ:	defw	0		;STORE HERE BSSIZE !
 	defw	0
 	defm	'bss'		;seg name
 	defb	0
@@ -1192,17 +1197,19 @@ CUST_REC:			;psect custom
 	defb	R_PSECT		;PSECT
 	defb	10H,00H		;seg mark
 CUST_NAME:
-	defs	4		;seg name
+;	defs	4		;seg name
+	defw	0
+	defw	0
 	defb	0
 
 BIGBUF:	defs	300H		;here will be placed the two buffers
 				;aligned at xx00H
-BUFFER:	defs	2		;to hold groups of records (TEXT or SYM)
-RBUFFER:defs	2		;to hold groups of records (RELOC)
+BUFFER:	defw	0		;to hold groups of records (TEXT or SYM)
+RBUFFER:defw	0		;to hold groups of records (RELOC)
 ;
-PBUF:	defs	2		;pointer in BUFFER
+PBUF:	defw	0		;pointer in BUFFER
 ;
-RPBUF:	defs	2		;pointer in RBUFFER
+RPBUF:	defw	0		;pointer in RBUFFER
 ;
 SAFE	equ	0FEH		;max number of bytes in TEXT buffer
 RSAFE	equ	0D0H		;max number of bytes in RELOC & SYM buffer
@@ -1236,19 +1243,19 @@ CUST3_F:defb	0		;1 if present,else 0
 ;
 PSECT_DONE:defb	0		;1 if PSECT records were written
 ;
-CRTGRP:defs	1		;current records group type
+CRTGRP:defb	0		;current records group type
 ;
-CRTPC:	defs	2		;current segment PC
+CRTPC:	defw	0		;current segment PC
 ;
-RELBUF:	defs	425		;reloc records buffer (85 x 5)
+RELBUF:	defs	640		;reloc records buffer (128 x 5)
 ;
 ;	RELOC record:
 ;		1 byte seg type (FF=EOL)
 ;		1 word offset
 ;		1 work symbol vector pointer, in case of external ref, else garbage
 ;
-LASTBASE:defs	2		;last start PC for a TEXT record
-LASTEXTSYM:defs	2		;last external symbol (pointer in symbols table)
+LASTBASE:defw	0		;last start PC for a TEXT record
+LASTEXTSYM:defw	0		;last external symbol (pointer in symbols table)
 ;
 ;order of groups
 ;
