@@ -19,6 +19,7 @@
 	global	ENDADR,ENDMOD,ENDMARK
 	global	C1N,C2N,C3N
 	global  DFLAG
+	global  FLAG_T,FLAG_D,FLAG_B,FLAG_C1,FLAG_C2,FLAG_C3
 ;
 NOOBJ		equ	0
 DEBUG		equ	0
@@ -552,6 +553,8 @@ pp1:
 	or	a		;if BSS defined
 	jr	z,p2
 				;write-it
+	ld	a,(FLAG_B)
+	ld	(BSS_FF),a
 	ld	hl,BSS_REC	;BSS
 	ld	b,BSS_REC_LEN
 	call	WriteBytes
@@ -567,6 +570,8 @@ p2:
 	or	a		;if DSEG defined
 	jr	z,p3
 				;write-it
+	ld	a,(FLAG_D)
+	ld	(DSEG_FF),a
 	ld	hl,DSEG_REC	;CSEG
 	ld	b,DSEG_REC_LEN
 	call	WriteBytes
@@ -575,6 +580,8 @@ p3:
 	or	a		;if CSEG defined
 	jr	z,p4
 				;write-it
+	ld	a,(FLAG_T)
+	ld	(CSEG_FF),a
 	ld	hl,CSEG_REC	;CSEG
 	ld	b,CSEG_REC_LEN
 	call	WriteBytes
@@ -583,6 +590,8 @@ p4:				;write custom segs (if any)
 	or	a
 	jr	z,p5
 				;write CUST1
+	ld	a,(FLAG_C1)
+	ld	(CUST_FF),a
 	ld	hl,C1N
 	call	WriteCust
 p5:
@@ -590,6 +599,8 @@ p5:
 	or	a
 	jr	z,p6
 				;write CUST2
+	ld	a,(FLAG_C2)
+	ld	(CUST_FF),a
 	ld	hl,C2N
 	call	WriteCust
 p6:
@@ -597,6 +608,8 @@ p6:
 	or	a
 	jr	z,p7
 				;write CUST3
+	ld	a,(FLAG_C3)
+	ld	(CUST_FF),a
 	ld	hl,C3N
 	call	WriteCust
 p7:
@@ -1162,7 +1175,7 @@ ASEG_REC_LEN	equ	$-ASEG_REC
 BSS_REC:			;psect bss
 	defw	6		;len
 	defb	R_PSECT		;PSECT
-	defb	10H,00H		;seg mark
+BSS_FF:	defb	10H,00H		;seg mark
 	defm	'bss'		;seg name
 	defb	0
 BSS_REC_LEN	equ	$-BSS_REC
@@ -1179,7 +1192,7 @@ BSS_S_REC_LEN	equ	$-BSS_S_REC
 DSEG_REC:			;psect data
 	defw	7		;len
 	defb	R_PSECT		;PSECT
-	defb	10H,00H		;seg mark
+DSEG_FF:defb	10H,00H		;seg mark
 	defm	'data'		;seg name
 	defb	0
 DSEG_REC_LEN	equ	$-DSEG_REC
@@ -1187,7 +1200,7 @@ DSEG_REC_LEN	equ	$-DSEG_REC
 CSEG_REC:			;psect text
 	defw	7		;len
 	defb	R_PSECT		;PSECT
-	defb	10H,00H		;seg mark
+CSEG_FF:defb	10H,00H		;seg mark
 	defm	'text'		;seg name
 	defb	0
 CSEG_REC_LEN	equ	$-CSEG_REC
@@ -1195,7 +1208,7 @@ CSEG_REC_LEN	equ	$-CSEG_REC
 CUST_REC:			;psect custom
 	defw	0		;len
 	defb	R_PSECT		;PSECT
-	defb	10H,00H		;seg mark
+CUST_FF:defb	10H,00H		;seg mark
 CUST_NAME:
 ;	defs	4		;seg name
 	defw	0

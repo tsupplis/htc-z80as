@@ -229,6 +229,7 @@
 	global	TempCnt
 	global	JFLAG,JPASS,JCOUNT
 	global	C1N,C2N,C3N,atof,ENDADR,EXTCHN,CMNPTR,ENDMARK,BSSIZE,ENDMOD,fperr
+	global  FLAG_T,FLAG_D,FLAG_B,FLAG_C1,FLAG_C2,FLAG_C3
 
         psect   text
 ;
@@ -5908,25 +5909,37 @@ S374:   cp      c
 PSECT_TAB:
 	defb	4
 	defm	'text'
-	defb	0
+	defb	0	;0=text
 	defb	4
 	defm	'data'
-	defb	1
+	defb	1	;1=data
 	defb	4
 	defm	'bss '
-	defb	2
+	defb	2	;2=bss
 	defb	3
 	defm	'abs'
-	defb	3
+	defb	3	;3=abs
+	defb	4
+	defm	'pure'
+	defb	4	;4=pure
+	defb	5
+	defm	'local'
+	defb	5	;5=local
+	defb	6
+	defm	'global'
+	defb	6	;6=global
+	defb	5
+	defm	'ovrld'
+	defb	7	;7=ovrld
 	defb	0		;end mark / length
 C1N:	defb	0,0,0,0		;place for CUST1 name
-	defb	4
+	defb	8	;8=cust1
 	defb	0		;end mark / length
 C2N:	defb	0,0,0,0		;place for CUST2 name
-	defb	5
+	defb	9	;9=cust2
 	defb	0		;end mark / length
 C3N:	defb	0,0,0,0		;place for CUST3 name
-	defb	6
+	defb	10	;10=cust3
 	defb	0		;end mark
 ;
 CUST_CNT:defb	0		;counter of custom segs
@@ -5944,6 +5957,7 @@ S670:
 	ld	a,(IDLEN)	;force seg name to 4 chars (pad with blanks)
 	cp	4
 	jr	z,is4
+	jp	nc,perr		;accept only up to 4 chars as psect name
 	ld	b,a		;B=len
 	ld	hl,IDBUF	;adjust pointer to IDBUF
 	ld	e,a
@@ -5963,24 +5977,57 @@ is4:				;search system seg names
 	ld	c,1
 	call	SYMLUK
 	pop	bc		;C=delimiter
-	jr	c,custom
+	jp	c,custom
 				;found,see which one it is
 	ld	a,(hl)
 	or	a
 	jp	z,ptext		;TEXT(,ABS)
 	cp	1
-	jp	z,S391		;DSEG
+	jp	z,pdata		;DSEG
 	cp	2
 	jp	z,SBSS		;BSS
 	cp	3		;'abs' not allowed as seg name
 	jp	z,perr
-	cp	4
-	jr	z,CST1
-	cp	5
-	jr	z,CST2
+	cp	4		;'pure' not allowed as seg name
+	jp	z,perr
+	cp	5		;'local' not allowed as seg name 
+	jp	z,perr
+	cp	6		;'global' not allowed as seg name 
+	jp	z,perr
+	cp	7		;'ovrld' not allowed as seg name 
+	jp	z,perr
+	cp	8
+	jp	z,CST1
+	cp	9
+	jp	z,CST2
 ;				else is custom3
 ;	PSECT custom3
 CST3:
+	ld	a,c		;check delimiter
+	or	a
+	jp	z,CST3A		;CUST3
+	cp	','
+	jp	nz,perr
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	ret	nz		;return if err
+	push	bc		;save delimiter
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	ld	a,(hl)
+	pop	bc		;C=delimiter
+	jp	c,perr
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_C3),a	;save DATA PSECT flags
+CST3A:
         ld      a,(LOCFLG)
         or      a
         ld      a,(CURSEG)
@@ -5996,6 +6043,31 @@ CST31:
 ;
 ;	PSECT custom2
 CST2:
+	ld	a,c		;check delimiter
+	or	a
+	jp	z,CST2A		;CUST2
+	cp	','
+	jp	nz,perr
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	ret	nz		;return if err
+	push	bc		;save delimiter
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	ld	a,(hl)
+	pop	bc		;C=delimiter
+	jp	c,perr
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_C2),a	;save DATA PSECT flags
+CST2A:
         ld      a,(LOCFLG)
         or      a
         ld      a,(CURSEG)
@@ -6011,6 +6083,31 @@ CST21:
 ;
 ;	PSECT custom1
 CST1:
+	ld	a,c		;check delimiter
+	or	a
+	jp	z,CST1A		;CUST1
+	cp	','
+	jp	nz,perr
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	ret	nz		;return if err
+	push	bc		;save delimiter
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	ld	a,(hl)
+	pop	bc		;C=delimiter
+	jp	c,perr
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_C1),a	;save DATA PSECT flags
+CST1A:
         ld      a,(LOCFLG)
         or      a
         ld      a,(CURSEG)
@@ -6073,27 +6170,89 @@ ptext:
 	or	a
 	jp	z,S390		;CSEG
 	cp	','
-	jr	nz,perr
+	jp	nz,perr
 	ld	hl,(PTR1)	;skip delimiter
 	inc	hl
 	ld	(PTR1),hl
 	call	ID		;get next id
+	ld	c,a		;C=delimiter
         ld      a,(ERRFLG)
         cp      ' '
 	ret	nz		;return if err
+	push	bc		;save delimiter
+				;might be 'abs'
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	pop	bc		;C=delimiter
+	jp	c,perr
+	ld	a,(hl)		;is it 'abs'?
+	cp	3
+	jp	z,S380		;if yes, we have an ASEG
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_T),a	;save TEXT PSECT flags
+	jp	S390		;CSEG
+;
+;	C=delimiter
+;	A=index in table
+;
+;	returns CARRY=0, B = flags
+;		else CARRY=1 : wrong flag
+;
+GetPsectFlags:
+	ld	b,10H		;default=global
+looppf:
+	cp	6		;global?
+	jr	z,nextflag	;ignore
+	cp	5		;local?
+	jr	nz,seepure
+				;is local
+	res	4,b		;b = b and 0EFH (erase global flag)
+	jr	nextflag
+seepure:
+	cp	4		;pure?
+	jr	nz,seeovrld
+				;is pure
+	set	5,b		;b = b or 20H (set pure flag)
+	jr	nextflag
+seeovrld:
+	cp	7		;ovrld?
+	scf
+	ret	nz		;return CARRY=1 if not
+				;is ovrld
+	set	6,b		;b = b or 40H (set ovrld flag)
+nextflag:			;try to process next
+	ld	a,c		;check delimiter
+	or	a		;EOL?
+	ret	z		;return CARRY=0 if yes, B=flags
+	cp	','
+	scf
+	ret	nz		;return CARRY=1 if not
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	scf
+	ret	nz		;return if err
+	push	bc		;save delimiter
 				;should be 'abs'
 	ld	de,PSECT_TAB
 	ld	c,1
 	call	SYMLUK
-	jr	c,perr
-	ld	a,(hl)		;is it 'abs'?
-	cp	3
-	jr	nz,perr
-				;yes, it is 'abs'
-				;TEXT,ABS == ASEG
+	pop	bc		;C=delimiter
+	ret	c		;return CARRY=1 if ID not in table
+	ld	a,(hl)		;A=index
+	jr	looppf
 ;
 ;       ASEG			;PSECT TEXT,ABS == ASEG
 ;
+				;yes, it is 'abs'
+				;TEXT,ABS == ASEG
 S380:
         xor     a
         dec     a
@@ -6106,11 +6265,38 @@ S380:
         ld      (PC),hl         ; and load PC with latest Absolute PC
         ld      a,00h
         ld      (CURSEG),a      ; set current segment type to Absolute
+				;FLAG_A is already set as a constant = 0D0H
         ret
 ;
 ;	BSS
 ;
 SBSS:
+	ld	a,c		;check delimiter
+	or	a
+	jp	z,SBSSA		;BSS
+	cp	','
+	jp	nz,perr
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	ret	nz		;return if err
+	push	bc		;save delimiter
+				;should be 'abs'
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	ld	a,(hl)
+	pop	bc		;C=delimiter
+	jp	c,perr
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_B),a	;save BSS PSECT flags
+SBSSA:
         ld      a,(LOCFLG)
         or      a
         ld      a,(CURSEG)
@@ -6138,10 +6324,36 @@ S390A:
         ld      hl,(CSEGPC)
         ld      (PC),hl         ; and load PC with latest Code PC
         ld      e,40h           ; segment type = Code
-        jr      S396            ; set segment type and loc counter
+        jp      S396            ; set segment type and loc counter
 ;
 ;       DSEG
 ;
+pdata:
+	ld	a,c		;check delimiter
+	or	a
+	jp	z,S391		;DSEG
+	cp	','
+	jp	nz,perr
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	call	ID		;get next id
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	ret	nz		;return if err
+	push	bc		;save delimiter
+				;should be 'abs'
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	ld	a,(hl)
+	pop	bc		;C=delimiter
+	jp	c,perr
+	call	GetPsectFlags	;else, identify psect flags
+	jp	c,perr
+	ld	a,b
+	ld	(FLAG_D),a	;save DATA PSECT flags
 S391:
         ld      a,(LOCFLG)
         or      a
@@ -7319,6 +7531,21 @@ BSEGPC: defw    0       ; current bss segment counter
 CUST1SEGPC:defw	0	; current custom1 segment counter
 CUST2SEGPC:defw	0	; current custom2 segment counter
 CUST3SEGPC:defw	0	; current custom3 segment counter
+
+;PSECT flag =
+;(if local) 
+;	(if ovrld) 40H + (if abs) 80H + (if pure) 20H
+;else (global is default)
+;	10H + (if ovrld) 40H + (if abs) 80H + (if pure) 20H
+
+;FLAG_A=0D0H (ovrld+abs+global) ASEG PSECT FLAG
+FLAG_T:	defb	10H	;TEXT PSECT flag (global is default)
+FLAG_D:	defb	10H	;DATA PSECT flag (global is default)
+FLAG_B:	defb	10H	;BSS PSECT flag (global is default)
+FLAG_C1:defb	10H	;CUST1 PSECT flag (global is default)
+FLAG_C2:defb	10H	;CUST2 PSECT flag (global is default)
+FLAG_C3:defb	10H	;CUST3 PSECT flag (global is default)
+
 LEN:    defb    0       ; length of current instruction
 LENDS:  defw    0       ; for DEFS
 CURSEG: defb    0       ; current segment: 40h=TEXT, 80h=DATA, C0h=BSS
