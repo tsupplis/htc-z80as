@@ -13,7 +13,8 @@
 	global	WLOC,WOBJ,WOBJ16,WDFENT
 	global	INIOBJ,CLSOBJ,IDBUF,IDLEN
 ;extern
-	global	OFLAG,CLOSE2,WNB2,BSSIZE
+	global	ASEGPC,CSEGPC,DSEGPC,BSEGPC,CUST1SEGPC,CUST2SEGPC,CUST3SEGPC
+	global	OFLAG,CLOSE2,WNB2
 	global	SYMTBL,SYMLUK
 	global	LASTEXTSYM
 	global	ENDADR,ENDMOD,ENDMARK
@@ -548,6 +549,13 @@ pp1:
 	ld	hl,ASEG_REC	;ASEG is default
 	ld	b,ASEG_REC_LEN
 	call	WriteBytes
+				;and also ASEG size
+	ld	hl,(ASEGPC)
+	ld	(ASZ),hl
+
+	ld	hl,ASEG_S_REC	;ASEG size
+	ld	b,ASEG_S_REC_LEN
+	call	WriteBytes
 
 	ld	a,(BSEG_F)
 	or	a		;if BSS defined
@@ -559,7 +567,7 @@ pp1:
 	ld	b,BSS_REC_LEN
 	call	WriteBytes
 				;and also BSS size
-	ld	hl,(BSSIZE)
+	ld	hl,(BSEGPC)
 	ld	(BSZ),hl
 
 	ld	hl,BSS_S_REC	;BSS size
@@ -572,8 +580,15 @@ p2:
 				;write-it
 	ld	a,(FLAG_D)
 	ld	(DSEG_FF),a
-	ld	hl,DSEG_REC	;CSEG
+	ld	hl,DSEG_REC	;DSEG
 	ld	b,DSEG_REC_LEN
+	call	WriteBytes
+				;and also DATA size
+	ld	hl,(DSEGPC)
+	ld	(DSZ),hl
+
+	ld	hl,DSEG_S_REC	;DATA size
+	ld	b,DSEG_S_REC_LEN
 	call	WriteBytes
 p3:
 	ld	a,(CSEG_F)
@@ -585,11 +600,21 @@ p3:
 	ld	hl,CSEG_REC	;CSEG
 	ld	b,CSEG_REC_LEN
 	call	WriteBytes
+				;and also TEXT size
+	ld	hl,(CSEGPC)
+	ld	(CSZ),hl
+
+	ld	hl,CSEG_S_REC	;TEXT size
+	ld	b,CSEG_S_REC_LEN
+	call	WriteBytes
+
 p4:				;write custom segs (if any)
 	ld	a,(CUST1_F)
 	or	a
 	jr	z,p5
 				;write CUST1
+	ld	hl,(CUST1SEGPC)
+	ld	(CUSTSZ),hl
 	ld	a,(FLAG_C1)
 	ld	(CUST_FF),a
 	ld	hl,C1N
@@ -599,6 +624,8 @@ p5:
 	or	a
 	jr	z,p6
 				;write CUST2
+	ld	hl,(CUST2SEGPC)
+	ld	(CUSTSZ),hl
 	ld	a,(FLAG_C2)
 	ld	(CUST_FF),a
 	ld	hl,C2N
@@ -608,6 +635,8 @@ p6:
 	or	a
 	jr	z,p7
 				;write CUST3
+	ld	hl,(CUST3SEGPC)
+	ld	(CUSTSZ),hl
 	ld	a,(FLAG_C3)
 	ld	(CUST_FF),a
 	ld	hl,C3N
@@ -621,6 +650,7 @@ p7:
 ;	HL=pointer to custom seg name (up to 4 chars, padded with blanks)
 ;
 WriteCust:
+	push	hl		;save pointer
 	ld	de,CUST_NAME
 	call	StoreCustName	;C=char count
 	ld	a,3
@@ -629,6 +659,16 @@ WriteCust:
 	add	a,3
 	ld	b,a		;B=counter
 	ld	hl,CUST_REC
+	call	WriteBytes
+	pop	hl		;restore pointer
+	ld	de,CUST_NAME_S
+	call	StoreCustName	;C=char count
+	ld	a,5
+	add	a,c
+	ld	(CUSTSEG_S_REC),a;store len
+	add	a,3
+	ld	b,a		;B=counter
+	ld	hl,CUSTSEG_S_REC
 	jp	WriteBytes
 ;
 ;	StoreCustName
@@ -1172,6 +1212,14 @@ ASEG_REC:			;psect text,abs
 	defb	0		;seg name = ''
 ASEG_REC_LEN	equ	$-ASEG_REC
 
+ASEG_S_REC:
+	defw	5		;len
+	defb	R_TEXT		;TEXT
+ASZ:	defw	0		;STORE HERE ASEG SIZE !
+	defw	0
+	defb	0		;seg name = ''
+ASEG_S_REC_LEN	equ	$-ASEG_S_REC
+
 BSS_REC:			;psect bss
 	defw	6		;len
 	defb	R_PSECT		;PSECT
@@ -1183,7 +1231,7 @@ BSS_REC_LEN	equ	$-BSS_REC
 BSS_S_REC:
 	defw	8		;len
 	defb	R_TEXT		;TEXT
-BSZ:	defw	0		;STORE HERE BSSIZE !
+BSZ:	defw	0		;STORE HERE BSS SIZE !
 	defw	0
 	defm	'bss'		;seg name
 	defb	0
@@ -1197,6 +1245,15 @@ DSEG_FF:defb	10H,00H		;seg mark
 	defb	0
 DSEG_REC_LEN	equ	$-DSEG_REC
 
+DSEG_S_REC:
+	defw	9		;len
+	defb	R_TEXT		;TEXT
+DSZ:	defw	0		;STORE HERE DATA SIZE !
+	defw	0
+	defm	'data'		;seg name
+	defb	0
+DSEG_S_REC_LEN	equ	$-DSEG_S_REC
+
 CSEG_REC:			;psect text
 	defw	7		;len
 	defb	R_PSECT		;PSECT
@@ -1204,6 +1261,15 @@ CSEG_FF:defb	10H,00H		;seg mark
 	defm	'text'		;seg name
 	defb	0
 CSEG_REC_LEN	equ	$-CSEG_REC
+
+CSEG_S_REC:
+	defw	9		;len
+	defb	R_TEXT		;TEXT
+CSZ:	defw	0		;STORE HERE TEXT SIZE !
+	defw	0
+	defm	'text'		;seg name
+	defb	0
+CSEG_S_REC_LEN	equ	$-CSEG_S_REC
 
 CUST_REC:			;psect custom
 	defw	0		;len
@@ -1214,6 +1280,18 @@ CUST_NAME:
 	defw	0
 	defw	0
 	defb	0
+
+CUSTSEG_S_REC:
+	defw	0		;len
+	defb	R_TEXT		;TEXT
+CUSTSZ:	defw	0		;STORE HERE CUST SIZE !
+	defw	0
+CUST_NAME_S:
+;	defs	4		;seg name
+	defw	0
+	defw	0
+	defb	0
+CUSTSEG_S_REC_LEN	equ	$-CUSTSEG_S_REC
 
 BIGBUF:	defs	300H		;here will be placed the two buffers
 				;aligned at xx00H

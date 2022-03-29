@@ -588,15 +588,16 @@ TOUP:	ld	a,(hl)
 ;	DE = symbol value to be found
 ;	returns CARRY = 0 : HL = symbol sufix pointer
 ;		CARRY = 1 : not found, HL=pointer to EOL
-;	HL,B affected
+;	HL,BC affected
 ;
 SearchTempSym:
-	ld	a,(TempCnt)
-	or	a		;empty?
+	ld	bc,(TempCnt)
+	ld	a,b
+	or	c		;empty?
 	scf
 	ret	z		;yes, return CARRY=1
 	ld	hl,TempSym
-	ld	b,a		;B=counter
+				;BC=counter
 sloop:	ld	a,(hl)		;low
 	inc	hl
 	cp	e
@@ -608,7 +609,10 @@ sloop:	ld	a,(hl)		;low
 	jr	nextss		
 nexts:	inc	hl
 nextss:	inc	hl
-	djnz	sloop	
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,sloop	
 	scf			;no one matched
 	ret
 ;
@@ -620,17 +624,19 @@ nextss:	inc	hl
 ;	HL,BC affected
 ;
 AddTempSym:
-	ld	a,(TempCnt)
-	ld	c,a
-	inc	a
+	ld	bc,(TempCnt)
+	ld	hl,MAXTMP
+	or	a
+	sbc	hl,bc
 	jr	z,full
-	ld	(TempCnt),a
-	ld	a,c
-	add	a,a		;*2
-	add	a,c		;*3
-	ld	c,a
-	ld	b,0
-	ld	hl,TempSym
+	inc	bc
+	ld	(TempCnt),bc
+	dec	bc
+	ld	h,b
+	ld	l,c
+	add	hl,hl		;*2
+	add	hl,bc		;*3
+	ld	bc,TempSym
 	add	hl,bc		;CARRY=0
 	ld	(hl),e		;store val 
 	inc	hl
@@ -662,7 +668,7 @@ nextchar:
 	ld	d,h
 	add	hl,hl
 	add	hl,hl
-	add	hl,hl		;val=val*10
+	add	hl,de		;val=val*10
 	ld	e,c
 	ld	d,0
 	add	hl,de
@@ -690,8 +696,10 @@ AdjustSymbol:
 ;
 	psect	data
 ;
+MAXTMP	equ	400	;maximum number of temporary symbols
+;
 TempCnt:defw	0	;counter
-TempSym:defs	300H
+TempSym:defs	400 * 3
 ;
 ;	value (word)
 ;	sufix (byte)

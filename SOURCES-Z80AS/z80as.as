@@ -228,8 +228,9 @@
 	global	ID_OR_NUMBER
 	global	TempCnt
 	global	JFLAG,JPASS,JCOUNT
-	global	C1N,C2N,C3N,atof,ENDADR,EXTCHN,CMNPTR,ENDMARK,BSSIZE,ENDMOD,fperr
+	global	C1N,C2N,C3N,atof,ENDADR,EXTCHN,CMNPTR,ENDMARK,ENDMOD,fperr
 	global  FLAG_T,FLAG_D,FLAG_B,FLAG_C1,FLAG_C2,FLAG_C3
+	global	ASEGPC,CSEGPC,DSEGPC,BSEGPC,CUST1SEGPC,CUST2SEGPC,CUST3SEGPC
 
         psect   text
 ;
@@ -332,6 +333,7 @@ S401:   ld      a,(PASSNO)
         ld      a,(DSFLAG)      ; DEFS,DS and pass 2?
         and     e
         jr      z,S402          ; branch if not
+	call	SAVEPC
         ld      a,(CURSEG)
 	and     SEGMASK
         ld      e,a
@@ -5002,6 +5004,7 @@ PSDTAB: defw    S300            ; EQU,ASET,DEFL
         defw    S670            ; PSECT
 	defw	SDEFF		; DEFF
 	defw	SJOPT		; JOPT
+	defw	SetAM9511	; *AM9511
 
 	psect	text
 
@@ -5182,9 +5185,85 @@ okff:	call	BACKUP		;we are back to the first char
 	ld	a,(fperr)
 	or	a
 	jr	z,no_overflow
-	ld	a,'F'
+	ld	a,'F'		;mark underflow/overflow
 	ld	(ERRFLG),a
 no_overflow:
+				;check AM9511 flag
+	ld	a,(AM9511F)
+	or	a		;if AM9511 flag was set...
+	jr	z,noAM9511
+				;convert to AM9511 format
+;HI --> AM
+;
+;E=byte_0 = m_l_l
+;D=byte_1 = m_l_h
+;L=byte_2 = m_h
+;H=byte_3 = s(1bit)e(7bits)
+;
+;C=reg_s = H=byte_3 & 80H;
+;
+	ld	a,h
+	and	80H
+	ld	c,a
+;
+;B=reg_e = H=byte_3 & 7FH;
+;
+	ld	b,h
+	res	7,b
+;
+;    /* If bit 23 is zero, must be zero (or not normalized).
+;     */
+;    if (byte_2 & 0x80) == 0)
+;        return FP_OK;
+;
+	bit	7,l
+	jp	z,noAM9511
+;
+;    /* Unbias the exponent.
+;     */
+;    A=reg_e -= 65;
+;
+	ld	a,b
+	sub	65
+;
+;    /* Range check on exponent.
+;     */
+;    if (A=reg_e < -64)
+;        return FP_ERR;
+;
+;    if (A=reg_e > 63)
+;        return FP_ERR;
+;
+	bit	7,a		;negative?
+	jr	z,1f
+				;yes
+	cp	-64		; A < -64 ?
+	jp	c,AM9511_ERR
+	jr	2f
+1:
+				;positive
+	cp	64		;A > 63 ?
+	jp	nc,AM9511_ERR
+2:
+;
+;    A=reg_e += 1;
+;
+	inc	a
+;
+;    /* Exponent to 7 bit (assumes 2's complement machine)
+;     */
+;    A=reg_e &= 0x7f;
+;
+	and	7FH
+;
+;    /* Merge in sign to exponent.
+;     */
+;H=byte_3 = C=reg_s | A=reg_e;
+;
+	or	c
+	ld	h,a
+;
+noAM9511:
 	push	hl		;emit the 4 bytes
 	push	de
 	ld	a,e
@@ -5211,19 +5290,22 @@ no_overflow:
 	jp	nz,DEBEND	;signal error
 	jr	loopd		;else process the next item
 ;
+AM9511_ERR:
+	ld	a,'F'		;mark underflow/overflow
+	ld	(ERRFLG),a
+	jr	noAM9511
+;
+SetAM9511:
+	ld	a,0FFH		;set AM9511 flag
+	ld	(AM9511F),a
+	ret
+;
 ;       DEFS, DS
 ;
 S307:   ld      a,1
         ld      (DSFLAG),a
 	call    EVALNEW
         ld      (LENDS),hl
-        ld      a,(PASSNO)
-        or      a
-        jr      z,1f
-        ld      de,(BSSIZE)     ;only on PASS 2
-        add     hl,de
-        ld      (BSSIZE),hl
-1:
         ld      a,(EVMODE)
         or      a
         jp      nz,RELERR
@@ -5906,6 +5988,13 @@ S374:   cp      c
 
 	psect	data
 
+;
+;	PSECT keywords table
+;
+;	Fixed PSECT names (4 chars, blanks appended) : text,data,bss
+;	3 Custom PSECT names (4 chars, blanks appended)
+;	PSECT flags: abs,pure,local,global,ovrld
+;
 PSECT_TAB:
 	defb	4
 	defm	'text'
@@ -5944,16 +6033,90 @@ C3N:	defb	0,0,0,0		;place for CUST3 name
 ;
 CUST_CNT:defb	0		;counter of custom segs
 ;
-
 	psect	text
-
+;
+;	Mark syntax error
+;
+perr:
+        ld      a,'L'
+        ld      (ERRFLG),a
+        ret
+;
+;	Get PSECT flags
+;
+;	A=delimiter
+;
+;	returns CARRY=0, B = flags
+;			ABS 	= 80H (bit 7)
+;			OVRLD 	= 40H (bit 6)
+;			PURE 	= 20H (bit 5)
+;			GLOBAL 	= 10H (bit 4)
+;		else CARRY=1 : wrong flag
+;
+GetPsectFlags:
+	ld	b,10H		;init B=flags (default=global)
+looppf:
+	cp	','
+	scf
+	ret	nz		;not the right delimiter
+	ld	hl,(PTR1)	;skip delimiter
+	inc	hl
+	ld	(PTR1),hl
+	push	bc		;save B
+	call	ID		;get next id
+	pop	bc		;restore B
+	ld	c,a		;C=delimiter
+        ld      a,(ERRFLG)
+        cp      ' '
+	scf
+	ret	nz		;return if err
+	push	bc		;save delimiter
+	ld	de,PSECT_TAB
+	ld	c,1
+	call	SYMLUK
+	pop	bc		;C=delimiter
+	ret	c		;return if ID not found
+	ld	a,(hl)		;get value
+	cp	6		;global?
+	jr	z,nextflag	;ignore (global is default, already set)
+	cp	5		;local?
+	jr	nz,seepure
+				;is local
+	res	4,b		;erase global flag
+	jr	nextflag
+seepure:
+	cp	4		;pure?
+	jr	nz,seeovrld
+				;is pure
+	set	5,b		;set pure flag
+	jr	nextflag
+seeovrld:
+	cp	7		;ovrld?
+	xjr	nz,seeabs
+				;is ovrld
+	set	6,b		;set ovrld flag
+	jr	nextflag
+seeabs:
+	cp	3		;abs?
+	scf
+	ret	nz		;return CARRY=1 if not
+				;is abs
+	set	7,b		;set abs flag
+nextflag:			;try to process next
+	ld	a,c		;check delimiter
+	or	a		;EOL?
+	ret	z		;return CARRY=0 if yes, B=flags
+	jr	looppf
+;
+;	PSECT ENTRY
+;
 S670:
         call    ID              ;get psect name
 	ld	c,a		;C=delimiter
         ld      a,(ERRFLG)
         cp      ' '
         ret     nz              ;on error, return
-	push	bc		;save delimiter
+	push	bc		;save C=delimiter
 	ld	a,(IDLEN)	;force seg name to 4 chars (pad with blanks)
 	cp	4
 	jr	z,is4
@@ -6006,27 +6169,10 @@ CST3:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST3A		;CUST3
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	ld	a,(hl)
-	pop	bc		;C=delimiter
-	jp	c,perr
-	call	GetPsectFlags	;else, identify psect flags
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
 	ld	a,b
-	ld	(FLAG_C3),a	;save DATA PSECT flags
+	ld	(FLAG_C3),a	;save PSECT flags
 CST3A:
         ld      a,(LOCFLG)
         or      a
@@ -6046,27 +6192,10 @@ CST2:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST2A		;CUST2
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	ld	a,(hl)
-	pop	bc		;C=delimiter
-	jp	c,perr
-	call	GetPsectFlags	;else, identify psect flags
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
 	ld	a,b
-	ld	(FLAG_C2),a	;save DATA PSECT flags
+	ld	(FLAG_C2),a	;save PSECT flags
 CST2A:
         ld      a,(LOCFLG)
         or      a
@@ -6086,27 +6215,10 @@ CST1:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST1A		;CUST1
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	ld	a,(hl)
-	pop	bc		;C=delimiter
-	jp	c,perr
-	call	GetPsectFlags	;else, identify psect flags
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
 	ld	a,b
-	ld	(FLAG_C1),a	;save DATA PSECT flags
+	ld	(FLAG_C1),a	;save PSECT flags
 CST1A:
         ld      a,(LOCFLG)
         or      a
@@ -6121,14 +6233,13 @@ CST11:
         ld      e,CUST1         ; segment type = CUST1
         jp      S396            ; set segment type and loc counter
 ;
-perr:
-        ld      a,'L'
-        ld      (ERRFLG),a
-        ret
-custom:				;process new custom segment request
+;	Process new custom segment request
+;
+custom:
 	ld	a,(CUST_CNT)
 	cp	3
-	jr	z,perr		;only 3 custom segs allowed
+	jp	z,perr		;only 3 custom segs allowed
+	push	bc		;save C=delimiter
 	inc	a		;increment custom segs counter
 	ld	(CUST_CNT),a
 				;place the length=4 and move the name to PSECT_TAB
@@ -6141,6 +6252,7 @@ custom:				;process new custom segment request
 	ld	de,C1N
 	ld	bc,4
 	ldir
+	pop	bc		;restore C=delimiter
 	jp	CST1
 c2:
 	cp	2
@@ -6152,6 +6264,7 @@ c2:
 	ld	de,C2N
 	ld	bc,4
 	ldir
+	pop	bc		;restore C=delimiter
 	jp	CST2
 c3:
 				;CUST3
@@ -6161,98 +6274,40 @@ c3:
 	ld	de,C3N
 	ld	bc,4
 	ldir
+	pop	bc		;restore C=delimiter
 	jp	CST3
 ;
-;	TEXT	- must check for ,ABS
+;	TEXT	- must check for abs flag
 ;
 ptext:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,S390		;CSEG
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-				;might be 'abs'
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	pop	bc		;C=delimiter
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
-	ld	a,(hl)		;is it 'abs'?
-	cp	3
-	jp	z,S380		;if yes, we have an ASEG
-	call	GetPsectFlags	;else, identify psect flags
-	jp	c,perr
+	bit	7,b		;abs == 80H
+	jp	nz,S380		;if 'abs' was used, we have an ASEG
 	ld	a,b
-	ld	(FLAG_T),a	;save TEXT PSECT flags
-	jp	S390		;CSEG
+	ld	(FLAG_T),a	;save PSECT flags
 ;
-;	C=delimiter
-;	A=index in table
+;       CSEG
 ;
-;	returns CARRY=0, B = flags
-;		else CARRY=1 : wrong flag
-;
-GetPsectFlags:
-	ld	b,10H		;default=global
-looppf:
-	cp	6		;global?
-	jr	z,nextflag	;ignore
-	cp	5		;local?
-	jr	nz,seepure
-				;is local
-	res	4,b		;b = b and 0EFH (erase global flag)
-	jr	nextflag
-seepure:
-	cp	4		;pure?
-	jr	nz,seeovrld
-				;is pure
-	set	5,b		;b = b or 20H (set pure flag)
-	jr	nextflag
-seeovrld:
-	cp	7		;ovrld?
-	scf
-	ret	nz		;return CARRY=1 if not
-				;is ovrld
-	set	6,b		;b = b or 40H (set ovrld flag)
-nextflag:			;try to process next
-	ld	a,c		;check delimiter
-	or	a		;EOL?
-	ret	z		;return CARRY=0 if yes, B=flags
-	cp	','
-	scf
-	ret	nz		;return CARRY=1 if not
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	scf
-	ret	nz		;return if err
-	push	bc		;save delimiter
-				;should be 'abs'
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	pop	bc		;C=delimiter
-	ret	c		;return CARRY=1 if ID not in table
-	ld	a,(hl)		;A=index
-	jr	looppf
+S390:
+        ld      a,(LOCFLG)
+        or      a
+        ld      a,(CURSEG)
+        jr      nz,S390A
+        cp      40h
+        ret     z               ; current segment is Code, ignore
+S390A:
+        call    SAVEPC          ; save PC for current segment
+        ld      hl,(CSEGPC)
+        ld      (PC),hl         ; and load PC with latest Code PC
+        ld      e,40h           ; segment type = Code
+        jp      S396            ; set segment type and loc counter
 ;
 ;       ASEG			;PSECT TEXT,ABS == ASEG
 ;
-				;yes, it is 'abs'
-				;TEXT,ABS == ASEG
 S380:
         xor     a
         dec     a
@@ -6274,28 +6329,10 @@ SBSS:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,SBSSA		;BSS
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-				;should be 'abs'
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	ld	a,(hl)
-	pop	bc		;C=delimiter
-	jp	c,perr
-	call	GetPsectFlags	;else, identify psect flags
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
 	ld	a,b
-	ld	(FLAG_B),a	;save BSS PSECT flags
+	ld	(FLAG_B),a	;save PSECT flags
 SBSSA:
         ld      a,(LOCFLG)
         or      a
@@ -6306,54 +6343,23 @@ SBSSA:
 S672:
         call    SAVEPC          ; save PC for current segment
         ld      hl,(BSEGPC)
-        ld      (PC),hl         ; and load PC with latest Data PC
+        ld      (PC),hl         ; and load PC with latest BSS PC
         ld      e,0C0h          ; segment type = BSS
         jp      S396            ; set segment type and loc counter
 ;
-;       CSEG
-;
-S390:
-        ld      a,(LOCFLG)
-        or      a
-        ld      a,(CURSEG)
-        jr      nz,S390A
-        cp      40h
-        ret     z               ; current segment is Code, ignore
-S390A:
-        call    SAVEPC          ; save PC for current segment
-        ld      hl,(CSEGPC)
-        ld      (PC),hl         ; and load PC with latest Code PC
-        ld      e,40h           ; segment type = Code
-        jp      S396            ; set segment type and loc counter
-;
-;       DSEG
+;       DATA
 ;
 pdata:
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,S391		;DSEG
-	cp	','
-	jp	nz,perr
-	ld	hl,(PTR1)	;skip delimiter
-	inc	hl
-	ld	(PTR1),hl
-	call	ID		;get next id
-	ld	c,a		;C=delimiter
-        ld      a,(ERRFLG)
-        cp      ' '
-	ret	nz		;return if err
-	push	bc		;save delimiter
-				;should be 'abs'
-	ld	de,PSECT_TAB
-	ld	c,1
-	call	SYMLUK
-	ld	a,(hl)
-	pop	bc		;C=delimiter
-	jp	c,perr
-	call	GetPsectFlags	;else, identify psect flags
+	call	GetPsectFlags	;identify psect flags
 	jp	c,perr
 	ld	a,b
-	ld	(FLAG_D),a	;save DATA PSECT flags
+	ld	(FLAG_D),a	;save PSECT flags
+;
+;	DSEG
+;
 S391:
         ld      a,(LOCFLG)
         or      a
@@ -7462,6 +7468,9 @@ OPCOD7: defb    7
         defm    '$SFCOND'
         defb    11,4,27
         defb    7
+        defm    '*AM9511'
+        defb    36,0,27
+        defb    7
         defm    'INCLUDE'
         defb    23,0,27
 tmp7    equ     $ - OPCOD7
@@ -7521,6 +7530,7 @@ IDBUF:  defs    IDMAX   ; current identifier
 ;MODIDN: defb    0       ; length
 ;        defs    8       ; module ID
 
+AM9511F:defb	0	; AM9511 flag (0 = OFF)
 CPU:    defb    0       ; target CPU type: 0=Z80, 1=Z180, 2=Z280
 DEFCPU: defb    0       ; default CPU type from command line
 PC:     defw    0       ; current program counter
@@ -7550,7 +7560,6 @@ LEN:    defb    0       ; length of current instruction
 LENDS:  defw    0       ; for DEFS
 CURSEG: defb    0       ; current segment: 40h=TEXT, 80h=DATA, C0h=BSS
 			;	2=custom1, 4=custom2, 8=custom3
-BSSIZE: defw    0       ; BSS segment size
 PTR1:   defw    0       ; points to next char in REC
 CURLNE: defb    0       ; current line number for paging output
 EQUFLG: defb    0       ; if non-zero VAL is used instead of PC for print
