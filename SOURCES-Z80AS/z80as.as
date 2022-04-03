@@ -6092,7 +6092,7 @@ seepure:
 	jr	nextflag
 seeovrld:
 	cp	7		;ovrld?
-	xjr	nz,seeabs
+	jr	nz,seeabs
 				;is ovrld
 	set	6,b		;set ovrld flag
 	jr	nextflag
@@ -7629,6 +7629,5 @@ SYMADR: defw    0       ; address of data field for last SYMENT
 IDADR:  defw    0       ; address of ID field for last SYMENT
 
 SYMTBL: defw    0       ; address of first available sym table slot
-
 
 
