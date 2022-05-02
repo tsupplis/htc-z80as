@@ -109,7 +109,9 @@ valid:
 	ld	c,a		;save final char
 	ld	a,(hl)		;check next char
 	call	UCASE
-	call	IsHexa		;if a hexa char, may be a hex number
+	call	IsHexa		;if a hexa char or digit, may be a hex number
+	jr	nc,notvalid
+	call	ISDIG
 	jr	nc,notvalid
 	cp	'H'		;if h or H, may be a hex number
 	jr	z,notvalid
