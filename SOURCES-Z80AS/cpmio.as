@@ -39,6 +39,7 @@
 	global	PTR1,ID,IDLEN,INT,INTBUF,VAL,SYMMOD,ADDSYM,IDADR
 
 	global	START
+	global	InitJRtab
 
 BDOS	equ	5		; BDOS entry point
 BOOT	equ	0		; warm boot
@@ -112,6 +113,7 @@ option:
 	jr	nz,4f
 	ld	a,0FFH
 	ld	(JFLAG),a	;set JFLAG 
+	call	InitJRtab	;init JR pointers table
 	inc	hl
 	jr	next
 4:

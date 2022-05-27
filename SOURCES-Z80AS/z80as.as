@@ -351,6 +351,11 @@ S402:   ld      a,(EFLG)
 ;
 ;       Pass 2
 ;
+	call	CheckPSECTS
+	jr	c,onlyone
+	xor	a		;if more than one from ASEG,CSEG,CUST1,CUST2,CUST3		
+	ld	(JFLAG),a	;was used, disable -J option
+onlyone:
 	ld	a,(JFLAG)	
 	or	a		
 	jr	z,nojoption	
@@ -1093,8 +1098,9 @@ S40:    call    REQCHR
 ;
 ;	CheckRange - checks if an optimization can be made
 ;
-;	if (VAL < PC and PC-VAL <= 126) or (VAL >= PC and VAL-PC <= 130)
+;	if (VAL < PC and PC-VAL <= 126) or (VAL >= PC and VAL-PC <= 129)
 ;	return CARRY=1, else CARRY=0
+;	B not affected
 ;
 CheckRange:
 	ld	de,(PC)		;DE=PC
@@ -1110,11 +1116,7 @@ CheckRange:
 	ld	c,127
 	jr	compare	
 VALGEPC:			;VAL >= PC, HL=VAL-PC
-	ld	c,131
-	ld	a,(PASSNO)	;third pass?
-	or	a
-	jr	z,compare
-	dec	c		;yes, decrement reference
+	ld	c,130
 compare:
 	ld	a,h
 	or	a
@@ -1145,7 +1147,7 @@ CL3:    ld	hl,(PTR1)	;save PTR1
         call    BACKUP
         call    EVALCND         ; try conditional
         cp      CONDD
-        jp      nz,S44          ; jump if not conditional
+        jp      nz,SimpleJP     ; jump if not conditional
         call    REQCHR
         defb    ','
         ld      a,l
@@ -1169,34 +1171,41 @@ CL3:    ld	hl,(PTR1)	;save PTR1
 	ld	(CODE),a	; save opcode
         call    BACKUP
         call    EVALNEW
+
+	ld	a,(CURSEG)	; if not in ASEG
+	or	a
 	ld	a,(OPMODE)
-	cp	EXTSYM+GBLSYM
-	jr	z,CL3A
-	ld	a,(EVFLGS)
-	cp	EQUNAME
-	jr	z,CL3A
+	jr	z,1f
+	or	a		; do not optimize jp to abs addr
+	jr	z,EMITCodeAddr
+1:
+	and	EXTSYM		;if jp addr is external, do not optimize
+	jr	nz,EMITCodeAddr
 	ld	a,(OPCODE)
 	cp	0C3H
-	jr	nz,CL3A
+	jr	nz,EMITCodeAddr
 	ld	a,(JPCOND)
 	cp	4
-	jr	nc,CL3A
+	jr	nc,EMITCodeAddr
 				; if cond = Z,NZ,C,NC
+seeoptdis:
 	ld	hl,JOPTDIS
 	ld	a,(hl)		; 0FFH if enabled
 	inc	hl		; JFLAG 0FFH if check requested
 	and	(hl)		; if not both == 0FFH
-	jr	z,CL3A		; skip range checking
+	jr	z,EMITCodeAddr	; skip range checking
 	inc	hl
-	ld	a,(hl)		; JPASS 
-	inc	hl		; PASSNO
-	ld	b,(hl)		; B=PASSNO
-	or	b		; if PASSNO == 0 and JPASS == 0
-	jr	z,CL3A		; skip range checking
-	call	CheckRange	; else check range
-	jr	nc,CL3A		; out range, stay with JP
-jpopt:				; in range, do JP optimization
-	ld	a,b		;B=PASSNO
+	ld	a,(hl)		; A = JPASS
+	inc	hl
+	ld	b,(hl)		; B = PASSNO
+	cp 	0FFH		; JPASS == 0FFH ?
+	jr	nz,checkpass2	; if not, see if we are in PASS 2
+	call	CheckRange	; if JPASS = 0FFH, check range
+	jr	nc,EMITCodeAddr	; out range, stay with JP
+	call	AddToJRtab	; in range, add PC to JR table, then...
+	jr	z,EMITCodeAddr	; if table full, stay with JP
+jpopt:				; else, do JP optimization
+	ld	a,(PASSNO)
 	or	a
 	jr	z,notnow
 	ld	hl,(JCOUNT)	;increment count on PASSNO=FFH
@@ -1211,38 +1220,37 @@ notnow:
 	ld	hl,0018H	;set opcode
 	ld	(OPCODE),hl
 	jp	CL4		;go to JR
-CL3A:
+;
+checkpass2:
+	ld	a,b
+	or	a		
+	jr	z,EMITCodeAddr	;if in PASS 0, continue JP handling
+				;we are in PASS2, after JR optimizations were made...
+	call	SearchJRtab	;is PC in the table?
+	jr	nc,jpopt	;yes, apply optimization
+				;else, continue JP handling
+;
+EMITCodeAddr:
 	ld	a,(CODE)
 	call	EMITB		; emit code
         jp      EMITV           ; emit address
 ;
-S44:    
+SimpleJP:
+	ld	a,(OPCODE)
+	ld	(CODE),a    
+	ld	a,(CURSEG)	; if not in ASEG
+	or	a
 	ld	a,(OPMODE)
-	cp	EXTSYM+GBLSYM
-	jr	z,S44A
-	ld	a,(EVFLGS)
-	cp	EQUNAME
-	jr	z,S44A
+	jr	z,1f
+	or	a		; do not optimize jp to abs addr
+	jr	z,EMITCodeAddr
+1:
+	and	EXTSYM		;if jp addr is external, do not optimize
+	jr	nz,EMITCodeAddr
 	ld	a,(OPCODE)
 	cp	0C3H
-	jr	nz,S44A
-	ld	hl,JOPTDIS
-	ld	a,(hl)		; 0FFH if enabled
-	inc	hl		; JFLAG 0FFH if check requested
-	and	(hl)		; if not both == 0FFH
-	jr	z,S44A		; skip range checking
-	inc	hl
-	ld	a,(hl)		; JPASS 
-	inc	hl		; PASSNO
-	ld	b,(hl)		; B=PASSNO
-	or	b		; if PASSNO == 0 and JPASS == 0
-	jr	z,S44A		; skip range checking
-	call	CheckRange	; else check range
-	jr	c,jpopt		; in range, do JP optimization
-S44A:
-	ld      a,(OPCODE)
-        call    EMITB
-        jp      EMITV           ; emit address
+	jr	nz,EMITCodeAddr
+	jp	seeoptdis	;continue JP processing
 ;
 ;       JP      (HL/IX/IY)
 ;
@@ -6166,6 +6174,8 @@ is4:				;search system seg names
 ;				else is custom3
 ;	PSECT custom3
 CST3:
+	ld	a,1
+	ld	(CUST3SEGUSED),a
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST3A		;CUST3
@@ -6189,6 +6199,8 @@ CST31:
 ;
 ;	PSECT custom2
 CST2:
+	ld	a,1
+	ld	(CUST2SEGUSED),a
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST2A		;CUST2
@@ -6212,6 +6224,8 @@ CST21:
 ;
 ;	PSECT custom1
 CST1:
+	ld	a,1
+	ld	(CUST1SEGUSED),a
 	ld	a,c		;check delimiter
 	or	a
 	jp	z,CST1A		;CUST1
@@ -6293,6 +6307,8 @@ ptext:
 ;       CSEG
 ;
 S390:
+	ld	a,1
+	ld	(CSEGUSED),a
         ld      a,(LOCFLG)
         or      a
         ld      a,(CURSEG)
@@ -6309,6 +6325,8 @@ S390A:
 ;       ASEG			;PSECT TEXT,ABS == ASEG
 ;
 S380:
+	ld	a,1
+	ld	(ASEGUSED),a
         xor     a
         dec     a
         ld      (LOCFLG),a      ; set loc pending flag
@@ -6838,7 +6856,91 @@ SUBVM:
        xor     a
        ld      (ix+2),a        ; else result just became Absolute
        ret
-
+;
+;	Check if more than one PSECT ASEG,CSEG,CUST1,CUST2,CUST3 type was used
+;
+;	return CARRY=1 if only one was used
+;		else CARRY=0
+;
+CheckPSECTS:
+	xor	a		;psect counter
+	ld	b,5		;5 psects: ASEG,CSEG,CUST1,CUST2,CUST3
+	ld	hl,ASEGUSED
+ckps:	add	a,(hl)
+	inc	hl
+	djnz	ckps
+	cp	2
+	ret
+;
+;	Init JR pointers table
+;	HL not affected
+;
+	global	InitJRtab
+;
+InitJRtab:
+	push	hl
+	ld	hl,JRTAB
+	ld	(JRTABPS),hl	;init search pointer
+	ld	(JRTABPA),hl	;init add pointer
+	xor	a		;fill table with zero
+	ld	b,a		;table has 256 bytes = 128 entries
+setz:	ld	(hl),a
+	inc	hl
+	djnz	setz
+	pop	hl
+	ret
+;
+;	Add PC to JR pointers table
+;
+;	returns Z=1 if table full
+;
+AddToJRtab:
+	ld	hl,(JRTABPA)
+	ld	a,(hl)		;check for EOL (0FFFFH)
+	inc	hl
+	and	(hl)
+	cp	0FFH
+	ret	z		;full, quit
+	dec	hl
+	ld	de,(PC)
+	ld	(hl),e		;store PC
+	inc	hl
+	ld	(hl),d
+	inc	hl
+	ld	(JRTABPA),hl	;save incremented add pointer
+	ret
+;
+;	Search PC in JR pointers table
+;
+;	returns CARRY=0 if found, else CARRY=1
+;
+SearchJRtab:
+	ld	bc,(PC)		;BC=PC
+	ld	de,(JRTABPS)	;DE=search pointer
+	ld	hl,(JRTABPA)	;HL=add pointer
+	or	a
+	sbc	hl,de		;if search pointer == add pointer...
+	jr	z,notfound	;there are no more records
+	ex	de,hl		;HL=search pointer
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	dec	hl		;DE=record,HL=search pointer
+	ex	de,hl		;HL=record,DE=search pointer
+	or	a
+	sbc	hl,bc		;record == PC ?
+	jr	z,found
+notfound:
+	scf
+	ret			;return NOT FOUND
+;
+found:	inc	de		;increment seach pointer
+	inc	de
+	ld	(JRTABPS),de	;save search pointer
+	or	a		;CARRY=0
+	ret			;return FOUND
+	
+;	
 	psect	data
 
        SUBTTL  Opcode Table
@@ -7520,6 +7622,14 @@ REC:    defs    RECMAX  ; input line, must follow HDRBUF
 TITLEB: defs    81      ; title buffer (80 chars + trailing null)
 SBTTLB: defs    61      ; subtitle buffer (60 chars + trailing null)
 
+;
+;	JP optimization table
+;
+JRTAB:	defs	256	; space for 128 JR pointers
+	defw	0FFFFH	;EOL
+JRTABPS:defs	2	; search pointer
+JRTABPA:defs	2	; add pointer
+;
 IDLEN:  defb    0       ; length of identifier
 IDBUF:  defs    IDMAX   ; current identifier
 
@@ -7534,13 +7644,24 @@ AM9511F:defb	0	; AM9511 flag (0 = OFF)
 CPU:    defb    0       ; target CPU type: 0=Z80, 1=Z180, 2=Z280
 DEFCPU: defb    0       ; default CPU type from command line
 PC:     defw    0       ; current program counter
+;
+;	order is critical - do not move ---------
+;
+ASEGUSED:defb	0
+CSEGUSED:defb	0
+CUST1SEGUSED:defb 0
+CUST2SEGUSED:defb 0
+CUST3SEGUSED:defb 0
+;
+;------------------------------------------------
+;
 ASEGPC: defw    0       ; current absolute segment counter
 CSEGPC: defw    0       ; current code segment counter
-DSEGPC: defw    0       ; current data segment counter
-BSEGPC: defw    0       ; current bss segment counter
 CUST1SEGPC:defw	0	; current custom1 segment counter
 CUST2SEGPC:defw	0	; current custom2 segment counter
 CUST3SEGPC:defw	0	; current custom3 segment counter
+DSEGPC: defw    0       ; current data segment counter
+BSEGPC: defw    0       ; current bss segment counter
 
 ;PSECT flag =
 ;(if local) 
@@ -7629,5 +7750,6 @@ SYMADR: defw    0       ; address of data field for last SYMENT
 IDADR:  defw    0       ; address of ID field for last SYMENT
 
 SYMTBL: defw    0       ; address of first available sym table slot
+
 
 
