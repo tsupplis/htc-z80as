@@ -393,6 +393,9 @@ S418:   ld      a,(de)          ; get length
         add     hl,de
         inc     hl              ;skip value
         inc     hl              ; HL = address mode field
+	ld	a,(de)		; temporary symbol?
+	call	ISDIG
+	jr	nc,S418C	; if yes, do not convert-it to External
         ld      a,(hl)
         ld      c,a
         and     UNDEF           ; undefined symbol?
@@ -541,7 +544,6 @@ RESETP: xor     a
         ld      (CLEVEL),a      ; reset conditionals stack
         ld      hl,CNDSTK
         ld      (CONDSP),hl
-	ld	(TempCnt),a	; init temporary symbols table
         dec     a
         ld      (hl),a          ; we always start true
         ld      (LOCFLG),a      ; set loc counter pending flag (L80 quirk fix)
@@ -550,6 +552,7 @@ RESETP: xor     a
         ld      hl,10
         ld      (RADIX),hl      ; reset radix
         ld      hl,0
+	ld	(TempCnt),hl	; init temporary symbols table
         ld      (PC),hl         ; reset PC
         ld      (ASEGPC),hl     ;  for all segments
         ld      (CSEGPC),hl
@@ -6883,10 +6886,13 @@ InitJRtab:
 	ld	(JRTABPS),hl	;init search pointer
 	ld	(JRTABPA),hl	;init add pointer
 	xor	a		;fill table with zero
-	ld	b,a		;table has 256 bytes = 128 entries
+				;table has 1024 bytes = 512 entries
+	ld	bc,4		; (C = 4) x (B = 256)
 setz:	ld	(hl),a
 	inc	hl
 	djnz	setz
+	dec	c
+	jr	nz,setz
 	pop	hl
 	ret
 ;
@@ -7625,7 +7631,7 @@ SBTTLB: defs    61      ; subtitle buffer (60 chars + trailing null)
 ;
 ;	JP optimization table
 ;
-JRTAB:	defs	256	; space for 128 JR pointers
+JRTAB:	defs	1024	; space for 512 JR pointers
 	defw	0FFFFH	;EOL
 JRTABPS:defs	2	; search pointer
 JRTABPA:defs	2	; add pointer

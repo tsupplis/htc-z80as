@@ -1,4 +1,7 @@
-# Z80AS - last update on 27 May 2022 - fixing jump optimization bug
+# Z80AS - last update on 19 March 2023 
+- increased jump optimization table to 512 (from 128)
+- fixed 2 bugs in temporary labels handling
+
 Z80 Assembler compatible with the HiTech C compiler, ZAS assembler and LINK linker
 
 Z80AS is a macro-assembler for Z80 microcomputers, running on the CP/M operating system. 
@@ -62,9 +65,9 @@ Compared to HiTech's ZAS assembler, Z80AS has some advantages:
 
 ----------------------------------------------------------------------------------------
 
-Z80AS.COM is the executable, version V4.7.
+Z80AS.HEX is the executable, version V4.8.
 
-Z80AS.COM was obtained by assembling the Z80AS source files using Z80AS (self assembling assembler :)
+Z80AS was obtained by assembling the Z80AS source files using Z80AS (self assembling assembler :)
 
 The folder SOURCES-Z80AS contains the Z80AS source files to be compiled ONLY with Z80AS.
 

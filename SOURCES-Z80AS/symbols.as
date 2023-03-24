@@ -135,7 +135,7 @@ back:
 				;back ref
 	call	CalcValue	;DE=temp symbol value
 	call	SearchTempSym
-	jr	c,doneref	;back ref not found == not valid
+	jr	c,notvalid	;back ref not found == not valid
 	ld	c,(hl)		;suffix
 	dec	c		;-1
 	call	AdjustSymbol	;add suffix-1 to IDBUF, increment IDLEN
