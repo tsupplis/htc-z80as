@@ -21,8 +21,8 @@
 ;                                                                      ;
 ;**********************************************************************;
 
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	MACROS support
+;	TITLE	Z80AS Macro-Assembler
+;	SUBTTL	MACROS support
 
 *include	ZSM.INC
 

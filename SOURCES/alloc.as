@@ -21,8 +21,8 @@
 ;                                                                      ;
 ;**********************************************************************;
 
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	Dynamic memory management routines
+;	TITLE	Z80AS Macro-Assembler
+;	SUBTTL	Dynamic memory management routines
 
 *include	ZSM.INC
 

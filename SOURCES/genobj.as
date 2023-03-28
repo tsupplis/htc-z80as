@@ -2,8 +2,8 @@
 ;
 ;	Object code builder for Z80AS assembler
 ;
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	Object code builder
+;	TITLE	Z80AS Macro-Assembler
+;	SUBTTL	Object code builder
 
 *include	ZSM.INC
 
@@ -25,7 +25,7 @@
 NOOBJ		equ	0
 DEBUG		equ	0
 ;----------------------------------------------------------------------------
-IF	DEBUG
+COND	DEBUG
 ;
 ;       Type String
 ;
@@ -127,21 +127,21 @@ C_t:	defm	' C='
 	defb	0
 A_t:	defm	' A='
 	defb	0
-ENDIF
+ENDC
 ;----------------------------------------------------------------------------
 ;
 ;	WOBJ - Write absolute byte in A
 ;
 WOBJ:
-IF	NOOBJ
+COND	NOOBJ
 	ret
-ENDIF
+ENDC
 	ld	c,a
 	ld	a,(JPASS)
 	or	a
 	ret	nz
 	ld	a,c
-IF	DEBUG
+COND	DEBUG
 	push	hl
 	push	af
 	ld	hl,WOBJ_t
@@ -152,7 +152,8 @@ IF	DEBUG
 	call	TypeA
 	pop	hl
 	ret
-ELSE
+ENDC
+COND	1-DEBUG
 	push	af
 	ld	a,(PBUF)
 	or	a		;if buffer empty
@@ -169,7 +170,7 @@ ok1:	pop	af		;A=byte
 	inc	hl
 	ld	(CRTPC),hl
 	ret
-ENDIF
+ENDC
 ;
 ;	WBOJ16 - Write relative word in HL, C = seg type.
 ;	C=	40H for TEXT, 
@@ -182,13 +183,13 @@ ENDIF
 ;		10H for external reference (symbol in (LASTEXTSYM))
 ;	
 WOBJ16:	
-IF	NOOBJ
+COND	NOOBJ
 	ret
-ENDIF	
+ENDC	
 	ld	a,(JPASS)
 	or	a
 	ret	nz
-IF	DEBUG
+COND	DEBUG
 	push	hl
 	ld	hl,WOBJ16_t
 	call	TypeString
@@ -220,7 +221,8 @@ l2:	ld	a,(hl)
 g1:
 	pop	hl
 	ret
-ELSE
+ENDC
+COND	1-DEBUG
 				;first store word in TEXT buffer 
 	push	hl		;save word
 	push	bc		;save seg type
@@ -253,7 +255,7 @@ INC_PC:				;CRTPC=CRTPC+2
 	inc	hl
 	ld	(CRTPC),hl
 	ret
-ENDIF
+ENDC
 ;
 ;	WLOC - Write loc counter: HL = address, E = seg type 
 ;	E=	40H for TEXT, 
@@ -265,13 +267,13 @@ ENDIF
 ;		08H for CUSTOM3
 ;
 WLOC:	
-IF	NOOBJ
+COND	NOOBJ
 	ret
-ENDIF	
+ENDC	
 	ld	a,(JPASS)
 	or	a
 	ret	nz
-IF	DEBUG
+COND	DEBUG
 	push	hl
 	ld	hl,WLOC_t
 	call	TypeString
@@ -289,7 +291,8 @@ IF	DEBUG
 	call	TypeA
 	pop	hl
 	ret
-ELSE
+ENDC
+COND	1-DEBUG
 	ld	a,(DFLAG)	;if "DEFS init" flag set...
 	or	a
 	jr	z,skip
@@ -375,7 +378,7 @@ e6:	cp	CUST2		;CUST2
 e7:	ld	hl,CUST3_F	;else is CUST3
 e8:	ld	(hl),1		;set the flag
 	ret
-ENDIF
+ENDC
 ;
 ;	WDFENT - Write entry point record: DE = address
 ;	HL = name, B = length
@@ -389,13 +392,13 @@ ENDIF
 ;		08H for CUSTOM3
 
 WDFENT:	
-IF	NOOBJ
+COND	NOOBJ
 	ret
-ENDIF	
+ENDC	
 	ld	a,(JPASS)
 	or	a
 	ret	nz
-IF	DEBUG
+COND	DEBUG
 	push	hl
 	ld	hl,WDFENT_t
 	call	TypeString
@@ -431,7 +434,8 @@ l3:	ld	a,(hl)
 	djnz	l3
 	pop	hl
 	ret
-ELSE	
+ENDC
+COND	1-DEBUG	
 	push	bc
 	push	de
 	push	hl	
@@ -455,16 +459,16 @@ w5:
 	pop	bc
 	
 	jp	WriteSym
-ENDIF
+ENDC
 ;
 ;	INIOBJ - initialize OBJ
 ;	write IDENT rec
 ;	reset vars
 ;
 INIOBJ:	
-IF	NOOBJ
+COND	NOOBJ
 	ret
-ENDIF	
+ENDC	
 	ld	a,(JPASS)
 	or	a
 	ret	nz
@@ -491,9 +495,9 @@ ENDIF
 ;	close object file.
 ;
 CLSOBJ:	
-IF	NOOBJ
+COND	NOOBJ
 	jp	CLOSE2		; close REL file
-ENDIF	
+ENDC	
 	ld	a,(JPASS)
 	or	a
 	ret	nz

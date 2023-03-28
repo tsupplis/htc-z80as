@@ -21,8 +21,8 @@
 ;                                                                      ;
 ;**********************************************************************;
 
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	Listing generation routines
+;	TITLE	Z80AS Macro-Assembler'
+;	SUBTTL	Listing generation routines
 
 *include	ZSM.INC
 

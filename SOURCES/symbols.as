@@ -20,8 +20,8 @@
 ;   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.          ;
 ;                                                                      ;
 ;**********************************************************************;
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	Symbol table routines
+;	TITLE	Z80AS Macro-Assembler
+;	SUBTTL	Symbol table routines
 
 *include	ZSM.INC
 

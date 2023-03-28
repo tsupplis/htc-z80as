@@ -4,8 +4,8 @@
 ;
 ;	Used by the DEFF pseudo operator
 ;
-	TITLE	Z80AS Macro-Assembler
-	SUBTTL	Floating point routines
+;	TITLE	Z80AS Macro-Assembler
+;	SUBTTL	Floating point routines
 
 	psect	text
 
