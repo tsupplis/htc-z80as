@@ -33,6 +33,7 @@
 	global	ERRFLG,CMPHD,MAXMEM,SYMTBL,VALID,MALLOC,MFREE
 	global	FNDREC,CNV2HX,DEFCPU,RADIX,UMODE
 	global	CMNPTR
+	global	ISDIG,ISLETR
 
 	global	SYMPTR,DSPTR
 
@@ -610,7 +611,6 @@ GETLN:	ld	hl,CPMBUF-1
 	call	ENTRY		; get command line
 	jp	CRLF
 
-
 ;	REWIND - Rewind input file
 
 REWIND:	ld	a,(INCLVL)
@@ -829,11 +829,17 @@ FNERR1:	ld	a,'V'
 	ld	(ERRFLG),a	; set error flag
 	scf
 	ret
-
+;
 ;	MKFCB - Create FCB from string
+;
 ;	HL points to string
 ;	DE points to FCB
-
+;
+;	does not affect DE
+;	
+;	returns CARRY = 0 : ok
+;			1 : filename or extension wrong
+;
 MKFCB:	call	CLRFCB
 	ld	a,(hl)
 	or	a
@@ -853,16 +859,18 @@ MF3:	ld	a,b
 	ld	(de),a		; store disk name
 	inc	hl
 MF4:	inc	de
-	ld	b,8
+	ld	b,8		;get file name
 	call	GETNAM
+	jr	c,retc		;if something wrong, return CARRY=1
 	ld	a,(hl)
 	cp	'.'
 	jr	nz,MF5
 	inc	hl
-MF5:	ld	b,3
+MF5:
+	ld	b,3
 	call	GETNAM
+retc:				;if something wrong, return CARRY=1
 	pop	de
-	xor	a
 	ret
 	
 CLRFCB:	push	de
@@ -873,30 +881,101 @@ CLRF1:	ld	(de),a
 	djnz	CLRF1
 	pop	de
 	ret
-
+;
+;	Verify A
+;
+;	returns CARRY = 1 char not allowed in a filename 
+;	else 		0 if char is allowed or it's a '.'
+;
+VALIDN:	call	ISDIG
+	ret	nc
+	call	ISLETR
+	ret	nc
+	cp	'<'
+	scf
+	ret	z
+	cp	'>'
+	scf
+	ret	z
+	cp	','
+	scf
+	ret	z
+	cp	';'
+	scf
+	ret	z
+	cp	'='
+	scf
+	ret	z
+	cp	'?'
+	scf
+	ret	z
+	cp	'*'
+	scf
+	ret	z
+	cp	'['
+	scf
+	ret	z
+	cp	']'
+	scf
+	ret	z
+	cp	'%'
+	scf
+	ret	z
+	cp	'|'
+	scf
+	ret	z
+	cp	'('
+	scf
+	ret	z
+	cp	')'
+	scf
+	ret	z
+	cp	'/'
+	scf
+	ret	z
+	cp	'\'
+	scf
+	ret	z
+	or	a
+	ret
+;
+;	returns CARRY = 1 if not '.' or ':' or blank or zero
+;
+CHECK:	
+	cp	'.'
+	ret	z
+	cp	':'
+	ret	z
+	cp	' '
+	ret	z
+	or	a
+	ret	z
+	scf
+	ret
+;
+;	B = "name" length (filename or ext)
+;
+;	returns CARRY = 1 if too large or not followed by '.' or ':' or blank or zero
+;
 GETNAM:	ld	a,(hl)
 	call	UCASE
-	call	VALID
-	jr	c,SFILL
-	cp	'.'
-	jr	z,SFILL
+	call	CHECK
+	jr	nc,SFILL
+	call	VALIDN
+	ret	c
 	ld	(de),a
 	inc	hl
 	inc	de
 	djnz	GETNAM
-SKIP:	ld	a,(hl)
-	call	UCASE
-	call	VALID
-	ret	c
-	cp	'.'
-	ret	z
-	jr	SKIP
+	ld	a,(hl)
+	jr	CHECK
 SFILL:	ld	a,' '
 SF:	ld	(de),a
 	inc	de
 	djnz	SF
+	or	a
 	ret
-
+;
 ADDEXT:	push	de
 	ex	de,hl
 	ld	bc,8+1
