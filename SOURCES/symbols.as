@@ -698,10 +698,10 @@ AdjustSymbol:
 ;
 	psect	data
 ;
-MAXTMP	equ	400	;maximum number of temporary symbols
+MAXTMP	equ	600	;maximum number of temporary symbols
 ;
 TempCnt:defw	0	;counter
-TempSym:defs	400 * 3
+TempSym:defs	600 * 3
 ;
 ;	value (word)
 ;	sufix (byte)
